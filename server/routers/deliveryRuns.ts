@@ -112,7 +112,7 @@ export const deliveryRunsRouter = router({
         .where(eq(deliveryRunOrders.deliveryRunId, input.id))
         .orderBy(deliveryRunOrders.sequence);
       
-      // Get load plan with SKU details
+      // Get load plan with SKU details - use SKU dimensions as source of truth
       const loadPlanResult = await db
         .select({
           id: loadPlan.id,
@@ -126,6 +126,10 @@ export const deliveryRunsRouter = router({
           weight: loadPlan.weight,
           rotation: loadPlan.rotation,
           skuName: skus.name,
+          skuLength: skus.length,
+          skuWidth: skus.width,
+          skuHeight: skus.height,
+          skuWeight: skus.weight,
           orderId: orderItems.orderId,
         })
         .from(loadPlan)
@@ -133,13 +137,31 @@ export const deliveryRunsRouter = router({
         .innerJoin(skus, eq(orderItems.skuId, skus.id))
         .where(eq(loadPlan.deliveryRunId, input.id));
       
+      // Map load plan to use SKU dimensions as source of truth
+      const mappedLoadPlan = loadPlanResult.map(item => ({
+        ...item,
+        // Use SKU dimensions if load plan dimensions are default (30) or missing
+        rotatedLength: (Number(item.rotatedLength) === 30 || !item.rotatedLength) && item.skuLength 
+          ? item.skuLength 
+          : item.rotatedLength,
+        rotatedWidth: (Number(item.rotatedWidth) === 30 || !item.rotatedWidth) && item.skuWidth 
+          ? item.skuWidth 
+          : item.rotatedWidth,
+        height: (Number(item.height) === 30 || !item.height) && item.skuHeight 
+          ? item.skuHeight 
+          : item.height,
+        weight: (Number(item.weight) === 5 || !item.weight) && item.skuWeight 
+          ? item.skuWeight 
+          : item.weight,
+      }));
+      
       return {
         ...runResult[0],
         truck: truckResult[0] || null,
         driver: driverResult[0] || null,
         helper: helperResult[0] || null,
         orders: ordersResult,
-        loadPlan: loadPlanResult,
+        loadPlan: mappedLoadPlan,
       };
     }),
 
@@ -197,7 +219,7 @@ export const deliveryRunsRouter = router({
         .where(eq(deliveryRunOrders.deliveryRunId, input.id))
         .orderBy(deliveryRunOrders.sequence);
       
-      // Get load plan (3D positions)
+      // Get load plan (3D positions) - use SKU dimensions as source of truth
       const loadPlanResult = await db
         .select({
           id: loadPlan.id,
@@ -205,6 +227,10 @@ export const deliveryRunsRouter = router({
           positionX: loadPlan.positionX,
           positionY: loadPlan.positionY,
           positionZ: loadPlan.positionZ,
+          rotatedLength: loadPlan.rotatedLength,
+          rotatedWidth: loadPlan.rotatedWidth,
+          height: loadPlan.height,
+          weight: loadPlan.weight,
           rotation: loadPlan.rotation,
           skuName: skus.name,
           skuLength: skus.length,
@@ -217,6 +243,24 @@ export const deliveryRunsRouter = router({
         .innerJoin(orderItems, eq(loadPlan.orderItemId, orderItems.id))
         .innerJoin(skus, eq(orderItems.skuId, skus.id))
         .where(eq(loadPlan.deliveryRunId, input.id));
+      
+      // Map load plan to use SKU dimensions as source of truth
+      const mappedLoadPlan = loadPlanResult.map(item => ({
+        ...item,
+        // Use SKU dimensions if load plan dimensions are default (30) or missing
+        rotatedLength: (Number(item.rotatedLength) === 30 || !item.rotatedLength) && item.skuLength 
+          ? item.skuLength 
+          : item.rotatedLength,
+        rotatedWidth: (Number(item.rotatedWidth) === 30 || !item.rotatedWidth) && item.skuWidth 
+          ? item.skuWidth 
+          : item.rotatedWidth,
+        height: (Number(item.height) === 30 || !item.height) && item.skuHeight 
+          ? item.skuHeight 
+          : item.height,
+        weight: (Number(item.weight) === 5 || !item.weight) && item.skuWeight 
+          ? item.skuWeight 
+          : item.weight,
+      }));
       
       // Get driver and helper info
       let driverInfo = null;
@@ -237,7 +281,7 @@ export const deliveryRunsRouter = router({
         driver: driverInfo,
         helper: helperInfo,
         orders: ordersResult,
-        loadPlan: loadPlanResult,
+        loadPlan: mappedLoadPlan,
       };
     }),
 

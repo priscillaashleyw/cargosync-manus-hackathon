@@ -120,3 +120,6 @@
 - [x] Add zone-based truck assignment
 - [x] Add depot reload time between trips
 - [x] Update AutoOptimizePage UI for new algorithm output
+
+## Bug Fixes (Continued)
+- [x] Fix load plan to use correct SKU dimensions from database

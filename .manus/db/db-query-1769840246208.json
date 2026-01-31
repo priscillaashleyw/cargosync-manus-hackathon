@@ -1,0 +1,90 @@
+{
+  "query": "SELECT id, name, length, width, height, weight FROM skus LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4ERqt4KC5DGmofa.root --database aXmYihyaaj3GcD37vHXiQo --execute SELECT id, name, length, width, height, weight FROM skus LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "FRIDGE 17",
+      "length": "95.50",
+      "width": "77.50",
+      "height": "190.50",
+      "weight": "116.00"
+    },
+    {
+      "id": "2",
+      "name": "FRYING PAN 18CM",
+      "length": "32.00",
+      "width": "20.00",
+      "height": "7.00",
+      "weight": "0.00"
+    },
+    {
+      "id": "3",
+      "name": "FRIDGE 14",
+      "length": "77.00",
+      "width": "77.50",
+      "height": "189.50",
+      "weight": "84.00"
+    },
+    {
+      "id": "4",
+      "name": "FRYING PAN 24CM",
+      "length": "45.00",
+      "width": "27.00",
+      "height": "7.00",
+      "weight": "0.00"
+    },
+    {
+      "id": "5",
+      "name": "FRIDGE 19",
+      "length": "93.20",
+      "width": "81.00",
+      "height": "190.70",
+      "weight": "144.00"
+    },
+    {
+      "id": "6",
+      "name": "TUPPERWARE",
+      "length": "0.00",
+      "width": "0.00",
+      "height": "0.00",
+      "weight": "4.65"
+    },
+    {
+      "id": "7",
+      "name": "FRIDGE 7",
+      "length": "69.80",
+      "width": "72.70",
+      "height": "190.70",
+      "weight": "108.00"
+    },
+    {
+      "id": "8",
+      "name": "CASSEROLE",
+      "length": "30.00",
+      "width": "26.00",
+      "height": "16.00",
+      "weight": "0.00"
+    },
+    {
+      "id": "9",
+      "name": "FRIDGE 9",
+      "length": "81.00",
+      "width": "73.30",
+      "height": "190.70",
+      "weight": "126.00"
+    },
+    {
+      "id": "10",
+      "name": "GLOVE",
+      "length": "0.00",
+      "width": "0.00",
+      "height": "0.00",
+      "weight": "0.00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tlength\twidth\theight\tweight\n1\tFRIDGE 17\t95.50\t77.50\t190.50\t116.00\n2\tFRYING PAN 18CM\t32.00\t20.00\t7.00\t0.00\n3\tFRIDGE 14\t77.00\t77.50\t189.50\t84.00\n4\tFRYING PAN 24CM\t45.00\t27.00\t7.00\t0.00\n5\tFRIDGE 19\t93.20\t81.00\t190.70\t144.00\n6\tTUPPERWARE\t0.00\t0.00\t0.00\t4.65\n7\tFRIDGE 7\t69.80\t72.70\t190.70\t108.00\n8\tCASSEROLE\t30.00\t26.00\t16.00\t0.00\n9\tFRIDGE 9\t81.00\t73.30\t190.70\t126.00\n10\tGLOVE\t0.00\t0.00\t0.00\t0.00\n",
+  "stderr": "",
+  "execution_time_ms": 1597
+}
