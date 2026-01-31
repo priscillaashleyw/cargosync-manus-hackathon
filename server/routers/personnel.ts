@@ -9,7 +9,7 @@ const personnelSchema = z.object({
   fullName: z.string().min(1),
   phone: z.string().optional(),
   personnelType: z.enum(["driver", "helper"]).default("driver"),
-  status: z.enum(["available", "assigned", "off_duty"]).optional().default("available"),
+  status: z.enum(["available", "assigned", "on_route", "off_duty"]).optional().default("available"),
 });
 
 export const personnelRouter = router({
@@ -123,7 +123,7 @@ export const personnelRouter = router({
   updateStatus: protectedProcedure
     .input(z.object({
       id: z.number(),
-      status: z.enum(["available", "assigned", "off_duty"]),
+      status: z.enum(["available", "assigned", "on_route", "off_duty"]),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

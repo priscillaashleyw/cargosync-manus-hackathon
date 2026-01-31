@@ -54,3 +54,50 @@
 - [x] Mark order as delivered functionality
 - [x] Truck availability status
 - [x] Deploy button with driver notification (Start/Complete run)
+
+## Bugs
+- [ ] Fix sign-in authentication issue
+
+## Phase 8: Improvements (New Requirements)
+
+### 1. Global Cross-Truck Optimization
+- [x] Implement Stage A: Auto-assign orders to trucks by delivery zones
+- [x] Implement Stage B: Optimize route within each truck (TSP/VRP)
+- [x] Add "Auto Optimize Plan" button for one-click optimization
+- [ ] Optional: Add "lock truck assignment" override feature
+
+### 2. Fixed Starting Location
+- [x] Set Tuas 639405 as default depot location
+- [x] Add configurable depot setting
+- [x] Ensure all routing/ETA calculations start from depot
+
+### 3. Availability & Auto Status Updates
+- [x] Auto update truck status: Available → On Delivery when dispatched
+- [x] Auto update driver/helper status: Available → Assigned when dispatched
+- [x] Auto revert statuses when route completes
+- [x] Prevent assignment to unavailable trucks/drivers
+
+### 4. Live Tracking
+- [x] Add Live Tracking page/panel
+- [x] Show current truck location on map
+- [x] Show route progress (completed vs remaining stops)
+- [x] Show updated ETA
+- [x] Implement simulated truck movement along route polyline
+
+### 5. Dimensions & Weights Standardization
+- [x] Standardize all dimensions to cm
+- [x] Standardize all weights to kg
+- [x] Add input validation (no negative values, numeric types)
+- [x] Auto-compute missing values and flag for review
+
+### 6. Helper Option
+- [x] Add helper requirement field: No helper / 1 helper / 2 helpers
+- [x] Consider helper availability in optimization
+- [x] Show helper requirement in UI and dispatch summary
+
+### 7. Load Plan Visualization Redesign
+- [x] Remove coordinate input requirement
+- [x] Output placement as Front / Middle / Back
+- [x] Redesign to truck-like view with labeled sections
+- [x] Place earlier drop-offs near back for easier access
+- [x] Keep heavy items low/centered for stability

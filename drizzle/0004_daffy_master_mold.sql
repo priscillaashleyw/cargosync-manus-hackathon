@@ -1,0 +1,2 @@
+ALTER TABLE `personnel` MODIFY COLUMN `status` enum('available','assigned','on_route','off_duty') NOT NULL DEFAULT 'available';--> statement-breakpoint
+ALTER TABLE `trucks` MODIFY COLUMN `status` enum('available','on_route','in_transit','maintenance') NOT NULL DEFAULT 'available';

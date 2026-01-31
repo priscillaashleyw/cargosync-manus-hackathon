@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Truck, Package, Users, ClipboardList, Zap, Box } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Truck, Package, Users, ClipboardList, Zap, Box, Navigation, Sparkles } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -29,7 +29,9 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Zap, label: "Optimize", path: "/optimize" },
+  { icon: Sparkles, label: "Auto Optimize", path: "/auto-optimize" },
+  { icon: Zap, label: "Manual Optimize", path: "/optimize" },
+  { icon: Navigation, label: "Live Tracking", path: "/live-tracking" },
   { icon: ClipboardList, label: "Delivery Runs", path: "/delivery-runs" },
   { icon: Package, label: "Orders", path: "/orders" },
   { icon: Truck, label: "Trucks", path: "/trucks" },

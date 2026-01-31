@@ -11,6 +11,7 @@ const orderSchema = z.object({
   address: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
+  helpersRequired: z.enum(["none", "one", "two"]).optional().default("none"),
   status: z.enum(["pending", "allocated", "in_transit", "delivered", "cancelled"]).optional().default("pending"),
 });
 
@@ -31,6 +32,7 @@ export const ordersRouter = router({
       zipcode: orders.zipcode,
       deliveryZone: orders.deliveryZone,
       address: orders.address,
+      helpersRequired: orders.helpersRequired,
       status: orders.status,
       createdAt: orders.createdAt,
       itemCount: sql<number>`(SELECT COUNT(*) FROM order_items WHERE order_items.orderId = ${orders.id})`,
@@ -89,6 +91,7 @@ export const ordersRouter = router({
         address: input.order.address,
         latitude: input.order.latitude !== undefined ? String(input.order.latitude) : null,
         longitude: input.order.longitude !== undefined ? String(input.order.longitude) : null,
+        helpersRequired: input.order.helpersRequired,
         status: input.order.status,
       };
       
@@ -125,6 +128,7 @@ export const ordersRouter = router({
       if (input.data.address) updateData.address = input.data.address;
       if (input.data.latitude !== undefined) updateData.latitude = String(input.data.latitude);
       if (input.data.longitude !== undefined) updateData.longitude = String(input.data.longitude);
+      if (input.data.helpersRequired) updateData.helpersRequired = input.data.helpersRequired;
       if (input.data.status) updateData.status = input.data.status;
       
       await db.update(orders).set(updateData).where(eq(orders.id, input.id));

@@ -10,6 +10,8 @@ import OrdersPage from "./pages/OrdersPage";
 import PersonnelPage from "./pages/PersonnelPage";
 import DeliveryRunsPage from "./pages/DeliveryRunsPage";
 import OptimizePage from "./pages/OptimizePage";
+import AutoOptimizePage from "./pages/AutoOptimizePage";
+import LiveTrackingPage from "./pages/LiveTrackingPage";
 import SKUsPage from "./pages/SKUsPage";
 import DeliveryRunDetailPage from "./pages/DeliveryRunDetailPage";
 
@@ -18,6 +20,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/optimize" component={OptimizePage} />
+      <Route path="/auto-optimize" component={AutoOptimizePage} />
+      <Route path="/live-tracking" component={LiveTrackingPage} />
       <Route path="/delivery-runs" component={DeliveryRunsPage} />
       <Route path="/delivery-runs/:id" component={DeliveryRunDetailPage} />
       <Route path="/orders" component={OrdersPage} />

@@ -20,7 +20,7 @@ type PersonnelType = {
   fullName: string;
   phone: string | null;
   personnelType: "driver" | "helper";
-  status: "available" | "assigned" | "off_duty";
+  status: "available" | "assigned" | "on_route" | "off_duty";
   createdAt: Date;
   updatedAt: Date;
 };

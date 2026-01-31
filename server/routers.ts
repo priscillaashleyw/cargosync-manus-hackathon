@@ -9,6 +9,8 @@ import { personnelRouter } from "./routers/personnel";
 import { deliveryRunsRouter } from "./routers/deliveryRuns";
 import { dashboardRouter } from "./routers/dashboard";
 import { optimizeRouter } from "./routers/optimize";
+import { globalOptimizeRouter } from "./routers/globalOptimize";
+import { liveTrackingRouter } from "./routers/liveTracking";
 
 export const appRouter = router({
   system: systemRouter,
@@ -31,6 +33,8 @@ export const appRouter = router({
   deliveryRuns: deliveryRunsRouter,
   dashboard: dashboardRouter,
   optimize: optimizeRouter,
+  globalOptimize: globalOptimizeRouter,
+  liveTracking: liveTrackingRouter,
 });
 
 export type AppRouter = typeof appRouter;

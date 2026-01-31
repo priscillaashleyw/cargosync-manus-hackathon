@@ -440,9 +440,31 @@ export const deliveryRunsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
+      // Get run details
+      const run = await db.select()
+        .from(deliveryRuns)
+        .where(eq(deliveryRuns.id, input.id))
+        .limit(1);
+      
+      if (!run[0]) throw new Error("Delivery run not found");
+      
       await db.update(deliveryRuns)
-        .set({ status: "in_progress", actualStartTime: new Date() })
+        .set({ status: "in_progress", actualStartTime: new Date(), currentStopIndex: 1 })
         .where(eq(deliveryRuns.id, input.id));
+      
+      // Update truck status to on_route
+      await db.update(trucks).set({ status: "on_route" }).where(eq(trucks.id, run[0].truckId));
+      
+      // Update personnel status to on_route
+      if (run[0].driverId) {
+        await db.update(personnel).set({ status: "on_route" }).where(eq(personnel.id, run[0].driverId));
+      }
+      if (run[0].helperId) {
+        await db.update(personnel).set({ status: "on_route" }).where(eq(personnel.id, run[0].helperId));
+      }
+      if (run[0].helper2Id) {
+        await db.update(personnel).set({ status: "on_route" }).where(eq(personnel.id, run[0].helper2Id));
+      }
       
       // Update all orders to in_transit
       const runOrders = await db.select({ orderId: deliveryRunOrders.orderId })
@@ -463,18 +485,30 @@ export const deliveryRunsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
+      // Get run details
+      const run = await db.select()
+        .from(deliveryRuns)
+        .where(eq(deliveryRuns.id, input.id))
+        .limit(1);
+      
+      if (!run[0]) throw new Error("Delivery run not found");
+      
       await db.update(deliveryRuns)
         .set({ status: "completed", actualEndTime: new Date() })
         .where(eq(deliveryRuns.id, input.id));
       
       // Update truck status to available
-      const run = await db.select({ truckId: deliveryRuns.truckId })
-        .from(deliveryRuns)
-        .where(eq(deliveryRuns.id, input.id))
-        .limit(1);
+      await db.update(trucks).set({ status: "available" }).where(eq(trucks.id, run[0].truckId));
       
-      if (run[0]) {
-        await db.update(trucks).set({ status: "available" }).where(eq(trucks.id, run[0].truckId));
+      // Update personnel status to available
+      if (run[0].driverId) {
+        await db.update(personnel).set({ status: "available" }).where(eq(personnel.id, run[0].driverId));
+      }
+      if (run[0].helperId) {
+        await db.update(personnel).set({ status: "available" }).where(eq(personnel.id, run[0].helperId));
+      }
+      if (run[0].helper2Id) {
+        await db.update(personnel).set({ status: "available" }).where(eq(personnel.id, run[0].helper2Id));
       }
       
       return { success: true };

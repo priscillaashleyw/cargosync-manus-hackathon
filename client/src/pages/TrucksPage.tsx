@@ -55,7 +55,7 @@ export default function TrucksPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  type TruckType = { id: number; truckName: string; width: string; depth: string; height: string; maxWeight: string | null; status: "available" | "in_transit" | "maintenance"; createdAt: Date; updatedAt: Date; };
+  type TruckType = { id: number; truckName: string; width: string; depth: string; height: string; maxWeight: string | null; status: "available" | "on_route" | "in_transit" | "maintenance"; createdAt: Date; updatedAt: Date; };
   const [editingTruck, setEditingTruck] = useState<TruckType | null>(null);
   const [formData, setFormData] = useState({
     truckName: "",

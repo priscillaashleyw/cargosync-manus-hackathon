@@ -28,7 +28,7 @@ export const trucks = mysqlTable("trucks", {
   depth: decimal("depth", { precision: 10, scale: 2 }).notNull(), // cm
   height: decimal("height", { precision: 10, scale: 2 }).notNull(), // cm
   maxWeight: decimal("maxWeight", { precision: 10, scale: 2 }).default("1000"), // kg
-  status: mysqlEnum("status", ["available", "in_transit", "maintenance"]).default("available").notNull(),
+  status: mysqlEnum("status", ["available", "on_route", "in_transit", "maintenance"]).default("available").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -66,6 +66,7 @@ export const orders = mysqlTable("orders", {
   address: text("address"),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  helpersRequired: mysqlEnum("helpersRequired", ["none", "one", "two"]).default("none").notNull(),
   status: mysqlEnum("status", ["pending", "allocated", "in_transit", "delivered", "cancelled"]).default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -97,7 +98,7 @@ export const personnel = mysqlTable("personnel", {
   fullName: varchar("fullName", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 20 }),
   personnelType: mysqlEnum("personnelType", ["driver", "helper"]).default("driver").notNull(),
-  status: mysqlEnum("status", ["available", "assigned", "off_duty"]).default("available").notNull(),
+  status: mysqlEnum("status", ["available", "assigned", "on_route", "off_duty"]).default("available").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -114,12 +115,16 @@ export const deliveryRuns = mysqlTable("delivery_runs", {
   truckId: int("truckId").notNull(),
   driverId: int("driverId"),
   helperId: int("helperId"),
+  helper2Id: int("helper2Id"), // Second helper for heavy loads
   status: mysqlEnum("status", ["planned", "in_progress", "completed", "cancelled"]).default("planned").notNull(),
   totalWeight: decimal("totalWeight", { precision: 10, scale: 2 }),
   totalVolume: decimal("totalVolume", { precision: 10, scale: 2 }),
   estimatedDuration: int("estimatedDuration"), // minutes
   actualStartTime: timestamp("actualStartTime"),
   actualEndTime: timestamp("actualEndTime"),
+  currentLatitude: decimal("currentLatitude", { precision: 10, scale: 7 }), // For live tracking
+  currentLongitude: decimal("currentLongitude", { precision: 10, scale: 7 }), // For live tracking
+  currentStopIndex: int("currentStopIndex").default(0), // Current stop in route
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -159,6 +164,7 @@ export const loadPlan = mysqlTable("load_plan", {
   height: decimal("height", { precision: 10, scale: 2 }), // cm - item height
   weight: decimal("weight", { precision: 10, scale: 2 }), // kg - item weight
   rotation: int("rotation").default(0), // 0, 90, 180, 270 degrees
+  placement: mysqlEnum("placement", ["front", "middle", "back"]).default("middle"), // Front/Middle/Back placement
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

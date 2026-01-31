@@ -22,6 +22,20 @@
       "when": 1769832485334,
       "tag": "0002_chilly_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1769834957749,
+      "tag": "0003_sleepy_madame_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1769835338312,
+      "tag": "0004_daffy_master_mold",
+      "breakpoints": true
     }
   ]
 }
