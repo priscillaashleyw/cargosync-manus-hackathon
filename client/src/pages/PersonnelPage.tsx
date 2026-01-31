@@ -13,6 +13,7 @@ import { trpc } from "@/lib/trpc";
 import { Users, Plus, Pencil, Trash2, Car, HardHat } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { BulkImportDialog } from "@/components/BulkImportDialog";
 
 type PersonnelType = {
   id: number;
@@ -58,6 +59,7 @@ export default function PersonnelPage() {
       toast.success("Status updated");
     },
   });
+  const importPersonnelMutation = trpc.bulkImport.importPersonnel.useMutation();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -191,13 +193,24 @@ export default function PersonnelPage() {
             <h1 className="text-3xl font-bold tracking-tight">Personnel</h1>
             <p className="text-muted-foreground">Manage drivers and helpers</p>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Personnel
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <BulkImportDialog
+              title="Import Personnel"
+              description="Upload an Excel or CSV file to bulk import drivers and helpers."
+              templateColumns={["Employee ID", "Full Name", "Role", "Phone", "Status"]}
+              templateSampleRow={["DRV001", "John Doe", "driver", "+65 9123 4567", "available"]}
+              onImport={async (fileData, filename) => {
+                return await importPersonnelMutation.mutateAsync({ fileData, filename });
+              }}
+              onSuccess={() => utils.personnel.list.invalidate()}
+            />
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Personnel
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add New Personnel</DialogTitle>
@@ -254,6 +267,7 @@ export default function PersonnelPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">

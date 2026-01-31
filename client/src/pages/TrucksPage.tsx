@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
 import { Truck, Plus, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { BulkImportDialog } from "@/components/BulkImportDialog";
 import { toast } from "sonner";
 
 export default function TrucksPage() {
@@ -52,6 +53,7 @@ export default function TrucksPage() {
       toast.success("Status updated");
     },
   });
+  const importTrucksMutation = trpc.bulkImport.importTrucks.useMutation();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -125,13 +127,24 @@ export default function TrucksPage() {
             <h1 className="text-3xl font-bold tracking-tight">Trucks</h1>
             <p className="text-muted-foreground">Manage your fleet of trucks</p>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Truck
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <BulkImportDialog
+              title="Import Trucks"
+              description="Upload an Excel or CSV file to bulk import trucks."
+              templateColumns={["Truck Name", "Width (cm)", "Depth (cm)", "Height (cm)", "Max Weight (kg)", "Status"]}
+              templateSampleRow={["Truck A", "200", "400", "200", "1000", "available"]}
+              onImport={async (fileData, filename) => {
+                return await importTrucksMutation.mutateAsync({ fileData, filename });
+              }}
+              onSuccess={() => utils.trucks.list.invalidate()}
+            />
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Truck
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add New Truck</DialogTitle>
@@ -194,6 +207,7 @@ export default function TrucksPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <Card>

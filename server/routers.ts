@@ -11,6 +11,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { optimizeRouter } from "./routers/optimize";
 import { globalOptimizeRouter } from "./routers/globalOptimize";
 import { liveTrackingRouter } from "./routers/liveTracking";
+import { bulkImportRouter } from "./routers/bulkImport";
 
 export const appRouter = router({
   system: systemRouter,
@@ -35,6 +36,7 @@ export const appRouter = router({
   optimize: optimizeRouter,
   globalOptimize: globalOptimizeRouter,
   liveTracking: liveTrackingRouter,
+  bulkImport: bulkImportRouter,
 });
 
 export type AppRouter = typeof appRouter;

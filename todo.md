@@ -123,3 +123,13 @@
 
 ## Bug Fixes (Continued)
 - [x] Fix load plan to use correct SKU dimensions from database
+
+## Phase 11: Bulk Import Feature
+- [x] Create Excel parsing utility for server-side
+- [x] Add bulk import endpoint for trucks
+- [x] Add bulk import endpoint for SKUs
+- [x] Add bulk import endpoint for personnel
+- [x] Add file upload UI to Trucks page
+- [x] Add file upload UI to SKUs page
+- [x] Add file upload UI to Personnel page
+- [x] Add sample template downloads

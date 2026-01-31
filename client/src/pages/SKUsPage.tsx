@@ -8,9 +8,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
 import { Box, Search, AlertTriangle } from "lucide-react";
 import { useState } from "react";
+import { BulkImportDialog } from "@/components/BulkImportDialog";
 
 export default function SKUsPage() {
+  const utils = trpc.useUtils();
   const { data: skus, isLoading } = trpc.skus.list.useQuery();
+  const importSkusMutation = trpc.bulkImport.importSkus.useMutation();
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredSKUs = skus?.filter((sku) => {
@@ -26,6 +29,16 @@ export default function SKUsPage() {
             <h1 className="text-3xl font-bold tracking-tight">SKUs / Products</h1>
             <p className="text-muted-foreground">Product catalog with dimensions and weights</p>
           </div>
+          <BulkImportDialog
+            title="Import SKUs"
+            description="Upload an Excel or CSV file to bulk import products/SKUs."
+            templateColumns={["SKU Code", "Name", "Length (cm)", "Width (cm)", "Height (cm)", "Weight (kg)", "Requires Two People"]}
+            templateSampleRow={["SKU001", "Office Chair", "60", "60", "100", "15", "no"]}
+            onImport={async (fileData, filename) => {
+              return await importSkusMutation.mutateAsync({ fileData, filename });
+            }}
+            onSuccess={() => utils.skus.list.invalidate()}
+          />
         </div>
 
         {/* Search */}
