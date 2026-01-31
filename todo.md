@@ -138,3 +138,8 @@
 - [x] Add reset orders endpoint to backend
 - [x] Add reset button with confirmation dialog to Orders page
 - [x] Test reset functionality
+
+## Phase 13: Reset Optimization Feature
+- [x] Add reset optimization endpoint (clear delivery runs, load plans, reset order status to pending)
+- [x] Add reset optimization button to Auto Optimize page
+- [x] Test reset and re-run optimization

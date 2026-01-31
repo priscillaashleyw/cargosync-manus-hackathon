@@ -28,6 +28,17 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // V3 Algorithm Types
 interface TripData {
@@ -136,11 +147,13 @@ export default function AutoOptimizePage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [selectedDrivers, setSelectedDrivers] = useState<Record<number, string>>({});
   const [selectedHelpers, setSelectedHelpers] = useState<Record<number, { helper1?: string; helper2?: string }>>({});
+  const [showResetDialog, setShowResetDialog] = useState(false);
 
-  const { data: pendingOrders, isLoading: ordersLoading } = trpc.dashboard.ordersForOptimization.useQuery();
-  const { data: drivers } = trpc.personnel.drivers.useQuery();
-  const { data: helpers } = trpc.personnel.helpers.useQuery();
+  const { data: pendingOrders, isLoading: ordersLoading, refetch: refetchOrders } = trpc.dashboard.ordersForOptimization.useQuery();
+  const { data: drivers, refetch: refetchDrivers } = trpc.personnel.drivers.useQuery();
+  const { data: helpers, refetch: refetchHelpers } = trpc.personnel.helpers.useQuery();
   const { data: depot } = trpc.globalOptimize.getDepot.useQuery();
+  const utils = trpc.useUtils();
 
   const optimizeMutation = trpc.globalOptimize.autoOptimize.useMutation({
     onSuccess: (data) => {
@@ -159,6 +172,24 @@ export default function AutoOptimizePage() {
       setOptimizationResult(null);
       setSelectedOrders(new Set());
       setLocation("/delivery-runs");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const resetMutation = trpc.deliveryRuns.resetAll.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setShowResetDialog(false);
+      setOptimizationResult(null);
+      setSelectedOrders(new Set());
+      // Refresh all data
+      refetchOrders();
+      refetchDrivers();
+      refetchHelpers();
+      utils.deliveryRuns.list.invalidate();
+      utils.dashboard.summary.invalidate();
     },
     onError: (error) => {
       toast.error(error.message);
@@ -286,12 +317,41 @@ export default function AutoOptimizePage() {
               V3 Algorithm: Multi-trip support with parallel deployment
             </p>
           </div>
-          {depot && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MapPin className="h-4 w-4" />
-              <span>Depot: {depot.name} ({depot.zipcode})</span>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {depot && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4" />
+                <span>Depot: {depot.name} ({depot.zipcode})</span>
+              </div>
+            )}
+            <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reset All Optimization
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset All Optimization Data?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all delivery runs, load plans, and reset all orders back to "pending" status. 
+                    Trucks and personnel will also be set back to "available". This allows you to re-run optimization with the same order data.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => resetMutation.mutate()}
+                    className="bg-red-600 hover:bg-red-700"
+                    disabled={resetMutation.isPending}
+                  >
+                    {resetMutation.isPending ? "Resetting..." : "Reset All"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

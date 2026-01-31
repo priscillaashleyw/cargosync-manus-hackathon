@@ -594,4 +594,30 @@ export const deliveryRunsRouter = router({
       
       return { success: true };
     }),
+
+  // Reset all optimization - clears delivery runs, load plans, and resets orders to pending
+  resetAll: protectedProcedure.mutation(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    
+    // 1. Delete all load plan items
+    await db.delete(loadPlan);
+    
+    // 2. Delete all delivery run orders
+    await db.delete(deliveryRunOrders);
+    
+    // 3. Delete all delivery runs
+    await db.delete(deliveryRuns);
+    
+    // 4. Reset all orders to pending status
+    await db.update(orders).set({ status: "pending" });
+    
+    // 5. Reset all trucks to available status
+    await db.update(trucks).set({ status: "available" });
+    
+    // 6. Reset all personnel to available status
+    await db.update(personnel).set({ status: "available" });
+    
+    return { success: true, message: "All optimization data has been reset. Orders are now pending." };
+  }),
 });
