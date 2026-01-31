@@ -109,3 +109,6 @@
 - [x] Geocode all Singapore zipcodes to get actual lat/lng
 - [x] Update all orders with real coordinates
 - [x] Verify map display shows correct locations
+
+## Bug Fixes
+- [x] Fix map visualization to use correct lat/lng from orders database
