@@ -6,16 +6,40 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
-import { Package, Search, Eye, MapPin } from "lucide-react";
+import { Package, Search, Eye, MapPin, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 
 export default function OrdersPage() {
+  const utils = trpc.useUtils();
   const { data: orders, isLoading } = trpc.orders.list.useQuery();
   const [searchTerm, setSearchTerm] = useState("");
   const [zoneFilter, setZoneFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const resetAllMutation = trpc.orders.resetAll.useMutation({
+    onSuccess: () => {
+      utils.orders.list.invalidate();
+      utils.dashboard.summary.invalidate();
+      toast.success("All orders have been reset successfully");
+    },
+    onError: (error) => {
+      toast.error(`Failed to reset orders: ${error.message}`);
+    },
+  });
 
   const filteredOrders = orders?.filter((order) => {
     const matchesSearch = order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -49,6 +73,32 @@ export default function OrdersPage() {
             <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
             <p className="text-muted-foreground">Manage delivery orders</p>
           </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={!orders || orders.length === 0}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Reset All Orders
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete all{" "}
+                  <strong>{orders?.length || 0} orders</strong> and their associated items from the database.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => resetAllMutation.mutate()}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {resetAllMutation.isPending ? "Resetting..." : "Yes, Reset All Orders"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {/* Filters */}

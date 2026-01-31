@@ -207,4 +207,17 @@ export const ordersRouter = router({
     const result = await db.select().from(orders).where(eq(orders.status, "pending"));
     return result;
   }),
+
+  // Reset all orders - deletes all orders and order items
+  resetAll: protectedProcedure.mutation(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    
+    // Delete all order items first (foreign key constraint)
+    await db.delete(orderItems);
+    // Then delete all orders
+    await db.delete(orders);
+    
+    return { success: true, message: "All orders have been reset" };
+  }),
 });

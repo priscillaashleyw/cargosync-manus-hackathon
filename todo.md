@@ -133,3 +133,8 @@
 - [x] Add file upload UI to SKUs page
 - [x] Add file upload UI to Personnel page
 - [x] Add sample template downloads
+
+## Phase 12: Reset Orders Feature
+- [x] Add reset orders endpoint to backend
+- [x] Add reset button with confirmation dialog to Orders page
+- [x] Test reset functionality
