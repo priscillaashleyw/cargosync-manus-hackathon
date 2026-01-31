@@ -1,0 +1,90 @@
+{
+  "query": "SELECT id, orderNumber, zipcode, deliveryZone, latitude, longitude FROM orders LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4ERqt4KC5DGmofa.root --database aXmYihyaaj3GcD37vHXiQo --execute SELECT id, orderNumber, zipcode, deliveryZone, latitude, longitude FROM orders LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "orderNumber": "32193",
+      "zipcode": "117686",
+      "deliveryZone": "Central",
+      "latitude": "1.2816866",
+      "longitude": "103.7867231"
+    },
+    {
+      "id": "2",
+      "orderNumber": "34952",
+      "zipcode": "691319",
+      "deliveryZone": "West",
+      "latitude": "1.3625857",
+      "longitude": "103.7381865"
+    },
+    {
+      "id": "3",
+      "orderNumber": "35427",
+      "zipcode": "120377",
+      "deliveryZone": "Central",
+      "latitude": "1.3175640",
+      "longitude": "103.7679752"
+    },
+    {
+      "id": "4",
+      "orderNumber": "36018",
+      "zipcode": "769301",
+      "deliveryZone": "North",
+      "latitude": "1.4360499",
+      "longitude": "103.8453784"
+    },
+    {
+      "id": "5",
+      "orderNumber": "36054",
+      "zipcode": "311403",
+      "deliveryZone": "East",
+      "latitude": "1.3393340",
+      "longitude": "103.8432371"
+    },
+    {
+      "id": "6",
+      "orderNumber": "36193",
+      "zipcode": "311403",
+      "deliveryZone": "East",
+      "latitude": "1.3393340",
+      "longitude": "103.8432371"
+    },
+    {
+      "id": "7",
+      "orderNumber": "36215",
+      "zipcode": "540244",
+      "deliveryZone": "North",
+      "latitude": "1.3933790",
+      "longitude": "103.8988871"
+    },
+    {
+      "id": "8",
+      "orderNumber": "36222",
+      "zipcode": "529891",
+      "deliveryZone": "East",
+      "latitude": "1.3389748",
+      "longitude": "103.9515148"
+    },
+    {
+      "id": "9",
+      "orderNumber": "36227",
+      "zipcode": "109702",
+      "deliveryZone": "Central",
+      "latitude": "1.2822177",
+      "longitude": "103.8036620"
+    },
+    {
+      "id": "10",
+      "orderNumber": "36239",
+      "zipcode": "513589",
+      "deliveryZone": "East",
+      "latitude": "1.3771683",
+      "longitude": "103.9478148"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\torderNumber\tzipcode\tdeliveryZone\tlatitude\tlongitude\n1\t32193\t117686\tCentral\t1.2816866\t103.7867231\n2\t34952\t691319\tWest\t1.3625857\t103.7381865\n3\t35427\t120377\tCentral\t1.3175640\t103.7679752\n4\t36018\t769301\tNorth\t1.4360499\t103.8453784\n5\t36054\t311403\tEast\t1.3393340\t103.8432371\n6\t36193\t311403\tEast\t1.3393340\t103.8432371\n7\t36215\t540244\tNorth\t1.3933790\t103.8988871\n8\t36222\t529891\tEast\t1.3389748\t103.9515148\n9\t36227\t109702\tCentral\t1.2822177\t103.8036620\n10\t36239\t513589\tEast\t1.3771683\t103.9478148\n",
+  "stderr": "",
+  "execution_time_ms": 1530
+}

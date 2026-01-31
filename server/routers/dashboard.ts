@@ -163,7 +163,8 @@ export const dashboardRouter = router({
         orderNumber: orders.orderNumber,
         zipcode: orders.zipcode,
         deliveryZone: orders.deliveryZone,
-        address: orders.address,
+        latitude: orders.latitude,
+        longitude: orders.longitude,
       })
       .from(orders)
       .where(eq(orders.status, "pending"));

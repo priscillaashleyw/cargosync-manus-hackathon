@@ -101,7 +101,6 @@ export const deliveryRunsRouter = router({
           orderNumber: orders.orderNumber,
           zipcode: orders.zipcode,
           deliveryZone: orders.deliveryZone,
-          address: orders.address,
           status: orders.status,
           sequence: deliveryRunOrders.sequence,
           itemCount: sql<number>`(SELECT COUNT(*) FROM order_items WHERE order_items.orderId = ${orders.id})`,
@@ -187,7 +186,6 @@ export const deliveryRunsRouter = router({
           orderNumber: orders.orderNumber,
           zipcode: orders.zipcode,
           deliveryZone: orders.deliveryZone,
-          address: orders.address,
           orderStatus: orders.status,
         })
         .from(deliveryRunOrders)

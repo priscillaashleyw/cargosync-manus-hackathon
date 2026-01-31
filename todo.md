@@ -101,3 +101,11 @@
 - [x] Redesign to truck-like view with labeled sections
 - [x] Place earlier drop-offs near back for easier access
 - [x] Keep heavy items low/centered for stability
+
+## Phase 9: Database Cleanup & Geocoding
+
+### Orders Table Update
+- [x] Remove address column from orders table
+- [x] Geocode all Singapore zipcodes to get actual lat/lng
+- [x] Update all orders with real coordinates
+- [x] Verify map display shows correct locations

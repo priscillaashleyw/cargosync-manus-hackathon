@@ -1,0 +1,258 @@
+{
+  "query": "SELECT DISTINCT zipcode, deliveryZone FROM orders ORDER BY zipcode;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4ERqt4KC5DGmofa.root --database aXmYihyaaj3GcD37vHXiQo --execute SELECT DISTINCT zipcode, deliveryZone FROM orders ORDER BY zipcode;",
+  "rows": [
+    {
+      "zipcode": "091017",
+      "deliveryZone": "Central"
+    },
+    {
+      "zipcode": "098156",
+      "deliveryZone": "Central"
+    },
+    {
+      "zipcode": "098449",
+      "deliveryZone": "Central"
+    },
+    {
+      "zipcode": "109702",
+      "deliveryZone": "Central"
+    },
+    {
+      "zipcode": "117686",
+      "deliveryZone": "Central"
+    },
+    {
+      "zipcode": "120357",
+      "deliveryZone": "Central"
+    },
+    {
+      "zipcode": "120377",
+      "deliveryZone": "Central"
+    },
+    {
+      "zipcode": "179105",
+      "deliveryZone": "Central"
+    },
+    {
+      "zipcode": "198784",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "238026",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "239333",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "249510",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "259850",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "270033",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "276955",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "310460",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "310480",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "311403",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "361216",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "361224",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "397693",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "418581",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "436923",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "469298",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "510643",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "513589",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "520370",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "528532",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "528614",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "528823",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "529891",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "530374",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "534209",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "540244",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "542308",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "542336",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "544338",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "547100",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "550240",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "560230",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "560558",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "560730",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "640408",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "640718",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "648886",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "650208",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "650318",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "688313",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "691244",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "691319",
+      "deliveryZone": "West"
+    },
+    {
+      "zipcode": "730807",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "731374",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "731376",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "738093",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "751370",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "761673",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "763672",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "769301",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "769303",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "797497",
+      "deliveryZone": "North"
+    },
+    {
+      "zipcode": "821161",
+      "deliveryZone": "East"
+    },
+    {
+      "zipcode": "823615",
+      "deliveryZone": "East"
+    }
+  ],
+  "messages": [],
+  "stdout": "zipcode\tdeliveryZone\n091017\tCentral\n098156\tCentral\n098449\tCentral\n109702\tCentral\n117686\tCentral\n120357\tCentral\n120377\tCentral\n179105\tCentral\n198784\tEast\n238026\tWest\n239333\tWest\n249510\tNorth\n259850\tNorth\n270033\tNorth\n276955\tNorth\n310460\tEast\n310480\tEast\n311403\tEast\n361216\tEast\n361224\tEast\n397693\tEast\n418581\tEast\n436923\tEast\n469298\tEast\n510643\tEast\n513589\tEast\n520370\tEast\n528532\tEast\n528614\tEast\n528823\tEast\n529891\tEast\n530374\tEast\n534209\tEast\n540244\tNorth\n542308\tNorth\n542336\tNorth\n544338\tNorth\n547100\tNorth\n550240\tNorth\n560230\tNorth\n560558\tNorth\n560730\tNorth\n640408\tWest\n640718\tWest\n648886\tWest\n650208\tWest\n650318\tWest\n688313\tWest\n691244\tWest\n691319\tWest\n730807\tNorth\n731374\tNorth\n731376\tNorth\n738093\tNorth\n751370\tNorth\n761673\tNorth\n763672\tNorth\n769301\tNorth\n769303\tNorth\n797497\tNorth\n821161\tEast\n823615\tEast\n",
+  "stderr": "",
+  "execution_time_ms": 1560
+}

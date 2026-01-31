@@ -23,7 +23,6 @@ interface OrderData {
   orderNumber: string;
   zipcode: string;
   zone: string | null;
-  address: string | null;
   latitude: number | null;
   longitude: number | null;
   helpersRequired: "none" | "one" | "two";
@@ -249,7 +248,7 @@ function optimizeRoute(assignment: TruckAssignment): RouteStop[] {
       sequence,
       latitude: coords.lat,
       longitude: coords.lon,
-      address: order.address || `${order.zone} - ${order.zipcode}`,
+      address: `${order.zone} Zone - ${order.zipcode}`,
       estimatedArrivalMinutes: Math.round(totalTime),
     });
     
@@ -448,7 +447,6 @@ export const globalOptimizeRouter = router({
             orderNumber: order.orderNumber,
             zipcode: order.zipcode,
             zone: order.deliveryZone,
-            address: order.address,
             latitude: order.latitude ? Number(order.latitude) : null,
             longitude: order.longitude ? Number(order.longitude) : null,
             helpersRequired: (order.helpersRequired || "none") as "none" | "one" | "two",

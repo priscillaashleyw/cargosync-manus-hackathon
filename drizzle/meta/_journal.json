@@ -36,6 +36,13 @@
       "when": 1769835338312,
       "tag": "0004_daffy_master_mold",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1769838817423,
+      "tag": "0005_tiny_master_chief",
+      "breakpoints": true
     }
   ]
 }

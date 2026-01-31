@@ -63,7 +63,6 @@ export const orders = mysqlTable("orders", {
   orderNumber: varchar("orderNumber", { length: 100 }).notNull().unique(),
   zipcode: varchar("zipcode", { length: 20 }).notNull(),
   deliveryZone: mysqlEnum("deliveryZone", ["North", "South", "East", "West", "Central"]),
-  address: text("address"),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   helpersRequired: mysqlEnum("helpersRequired", ["none", "one", "two"]).default("none").notNull(),

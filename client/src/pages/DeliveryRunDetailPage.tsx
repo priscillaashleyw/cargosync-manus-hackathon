@@ -448,7 +448,7 @@ export default function DeliveryRunDetailPage() {
                       orderNumber: order.orderNumber,
                       zipcode: order.zipcode,
                       zone: order.deliveryZone || "Central",
-                      address: order.address || undefined,
+                      address: `${order.deliveryZone} Zone - ${order.zipcode}`,
                     }))}
                   />
                 ) : (

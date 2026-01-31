@@ -77,8 +77,8 @@ export const liveTrackingRouter = router({
           orderNumber: orders.orderNumber,
           latitude: orders.latitude,
           longitude: orders.longitude,
-          address: orders.address,
           zone: orders.deliveryZone,
+          zipcode: orders.zipcode,
         })
         .from(deliveryRunOrders)
         .innerJoin(orders, eq(deliveryRunOrders.orderId, orders.id))
@@ -129,7 +129,7 @@ export const liveTrackingRouter = router({
           sequence: stop.sequence,
           latitude: Number(stop.latitude) || DEPOT.latitude,
           longitude: Number(stop.longitude) || DEPOT.longitude,
-          address: stop.address || `${stop.zone} Zone`,
+          address: `${stop.zone} Zone - ${stop.zipcode}`,
           status: stop.deliveredAt 
             ? "delivered" 
             : index + 1 === currentStopIndex 

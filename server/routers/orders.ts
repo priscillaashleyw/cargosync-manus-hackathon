@@ -8,7 +8,6 @@ const orderSchema = z.object({
   orderNumber: z.string().min(1),
   zipcode: z.string().min(1),
   deliveryZone: z.enum(["North", "South", "East", "West", "Central"]).optional(),
-  address: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   helpersRequired: z.enum(["none", "one", "two"]).optional().default("none"),
@@ -31,7 +30,6 @@ export const ordersRouter = router({
       orderNumber: orders.orderNumber,
       zipcode: orders.zipcode,
       deliveryZone: orders.deliveryZone,
-      address: orders.address,
       helpersRequired: orders.helpersRequired,
       status: orders.status,
       createdAt: orders.createdAt,
@@ -88,7 +86,6 @@ export const ordersRouter = router({
         orderNumber: input.order.orderNumber,
         zipcode: input.order.zipcode,
         deliveryZone: input.order.deliveryZone,
-        address: input.order.address,
         latitude: input.order.latitude !== undefined ? String(input.order.latitude) : null,
         longitude: input.order.longitude !== undefined ? String(input.order.longitude) : null,
         helpersRequired: input.order.helpersRequired,
@@ -125,7 +122,6 @@ export const ordersRouter = router({
       if (input.data.orderNumber) updateData.orderNumber = input.data.orderNumber;
       if (input.data.zipcode) updateData.zipcode = input.data.zipcode;
       if (input.data.deliveryZone) updateData.deliveryZone = input.data.deliveryZone;
-      if (input.data.address) updateData.address = input.data.address;
       if (input.data.latitude !== undefined) updateData.latitude = String(input.data.latitude);
       if (input.data.longitude !== undefined) updateData.longitude = String(input.data.longitude);
       if (input.data.helpersRequired) updateData.helpersRequired = input.data.helpersRequired;
