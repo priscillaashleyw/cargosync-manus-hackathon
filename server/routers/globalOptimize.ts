@@ -17,17 +17,85 @@ import {
 } from "../../drizzle/schema";
 import { DEPOT, ZONES, HELPER_OPTIONS } from "../../shared/logistics";
 
+// ============================================================================
+// ROUTE OPTIMIZATION ALGORITHM V3
+// Based on route_optimizer_v3.py with:
+// 1. Multi-trip support with RETURN-TO-DEPOT time between trips
+// 2. Parallel truck deployment (total time = max time across all trucks)
+// 3. Improved load balancing with Best-Fit Decreasing
+// 4. Better zone-based optimization
+// 5. Detailed route scheduling with reload times
+// ============================================================================
+
+// Singapore postal district to zone mapping
+const ZONE_MAPPING: Record<string, string> = {
+  '01': 'Central', '02': 'Central', '03': 'Central', '04': 'Central',
+  '05': 'Central', '06': 'Central', '07': 'Central', '08': 'Central',
+  '14': 'Central', '15': 'Central', '16': 'Central', '17': 'Central',
+  '18': 'Central', '19': 'Central', '20': 'Central', '21': 'Central',
+  '38': 'East', '39': 'East', '40': 'East', '41': 'East', '42': 'East',
+  '43': 'East', '44': 'East', '45': 'East', '46': 'East', '47': 'East',
+  '48': 'East', '49': 'East', '50': 'East', '51': 'East', '52': 'East',
+  '53': 'North', '54': 'North', '55': 'North', '56': 'North', '57': 'North',
+  '72': 'North', '73': 'North', '75': 'North', '76': 'North', '77': 'North',
+  '78': 'North', '79': 'North', '80': 'North', '81': 'North', '82': 'North',
+  '22': 'West', '23': 'West',
+  '58': 'West', '59': 'West', '60': 'West', '61': 'West', '62': 'West',
+  '63': 'West', '64': 'West', '65': 'West', '66': 'West', '67': 'West',
+  '68': 'West', '69': 'West', '70': 'West', '71': 'West',
+  '09': 'South', '10': 'South', '11': 'South', '12': 'South', '13': 'South',
+  '24': 'South', '25': 'South', '26': 'South', '27': 'South', '28': 'South',
+  '29': 'South', '30': 'South', '31': 'South', '32': 'South', '33': 'South',
+  '34': 'South', '35': 'South', '36': 'South', '37': 'South',
+};
+
+// Estimated travel times from depot (Tuas) to each zone in minutes
+const ZONE_TRAVEL_TIMES: Record<string, number> = {
+  'West': 15,
+  'Central': 30,
+  'South': 35,
+  'East': 45,
+  'North': 40,
+};
+
+// Inter-zone travel times (minutes)
+const INTER_ZONE_TIMES: Record<string, number> = {
+  'Central-East': 25, 'Central-North': 20, 'Central-South': 15,
+  'Central-West': 20, 'East-North': 25, 'East-South': 30,
+  'East-West': 40, 'North-South': 35, 'North-West': 35,
+  'South-West': 25,
+};
+
+// Reload time at depot (minutes)
+const DEPOT_RELOAD_TIME = 30;
+
+function getInterZoneTime(zone1: string, zone2: string): number {
+  if (zone1 === zone2) return 5;
+  const key = [zone1, zone2].sort().join('-');
+  return INTER_ZONE_TIMES[key] || 30;
+}
+
+function getZoneFromZipcode(zipcode: string): string {
+  const sector = zipcode.toString().padStart(6, '0').substring(0, 2);
+  return ZONE_MAPPING[sector] || 'Central';
+}
+
 // Types
 interface OrderData {
   id: number;
   orderNumber: string;
   zipcode: string;
-  zone: string | null;
+  zone: string;
+  sector: string;
   latitude: number | null;
   longitude: number | null;
   helpersRequired: "none" | "one" | "two";
   totalWeight: number;
   totalVolume: number;
+  maxLength: number;
+  maxWidth: number;
+  maxHeight: number;
+  needsTwoPeople: boolean;
   items: ItemData[];
 }
 
@@ -53,23 +121,39 @@ interface TruckData {
   volume: number;
 }
 
-interface TruckAssignment {
+interface TruckTrip {
+  tripId: number;
+  truckId: number;
+  maxVolume: number;
+  maxWeight: number;
+  truckDims: [number, number, number];
+  loadedOrders: OrderData[];
+  currentVolume: number;
+  currentWeight: number;
+  assignedZones: string[];
+}
+
+interface TruckWithTrips {
   truck: TruckData;
-  orders: OrderData[];
-  totalWeight: number;
-  totalVolume: number;
-  helpersNeeded: number;
-  route: RouteStop[];
-  loadPlan: LoadPlanItem[];
+  trips: TruckTrip[];
+  totalOrders: number;
+  totalVolumeUsed: number;
+  totalWeightUsed: number;
+  totalRouteTime: number;
 }
 
 interface RouteStop {
   orderId: number;
+  orderNumber: string;
   sequence: number;
+  zone: string;
+  zipcode: string;
+  sector: string;
   latitude: number;
   longitude: number;
-  address: string;
-  estimatedArrivalMinutes: number;
+  weightKg: number;
+  volumeM3: number;
+  needsTwoPeople: boolean;
 }
 
 interface LoadPlanItem {
@@ -87,189 +171,394 @@ interface LoadPlanItem {
   placement: "front" | "middle" | "back";
 }
 
-// Calculate distance between two points (Haversine formula)
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth's radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
+// Trip helper functions
+function canFitInTrip(trip: TruckTrip, order: OrderData): boolean {
+  if (trip.currentVolume + order.totalVolume > trip.maxVolume) return false;
+  if (trip.currentWeight + order.totalWeight > trip.maxWeight) return false;
+  
+  const dims = [...trip.truckDims].sort((a, b) => b - a);
+  const orderDims = [order.maxLength, order.maxWidth, order.maxHeight].sort((a, b) => b - a);
+  
+  for (let i = 0; i < 3; i++) {
+    if (orderDims[i] > dims[i]) return false;
+  }
+  return true;
 }
 
-// Get coordinates for an order (use zone center if no specific coords)
-function getOrderCoordinates(order: OrderData): { lat: number; lon: number } {
-  if (order.latitude && order.longitude) {
-    return { lat: Number(order.latitude), lon: Number(order.longitude) };
+function loadOrderIntoTrip(trip: TruckTrip, order: OrderData): void {
+  trip.loadedOrders.push(order);
+  trip.currentVolume += order.totalVolume;
+  trip.currentWeight += order.totalWeight;
+  if (!trip.assignedZones.includes(order.zone)) {
+    trip.assignedZones.push(order.zone);
   }
-  // Use zone center as fallback
-  const zone = order.zone as keyof typeof ZONES || "Central";
-  return { lat: ZONES[zone].latitude, lon: ZONES[zone].longitude };
 }
 
-// Stage A: Auto-assign orders to trucks by zone clustering
-function assignOrdersToTrucks(
-  orders: OrderData[],
-  trucks: TruckData[],
-  availableHelpers: number
-): TruckAssignment[] {
-  const assignments: TruckAssignment[] = [];
-  const unassignedOrders = [...orders];
-  const availableTrucks = [...trucks];
+function optimizeZoneOrder(zones: string[]): string[] {
+  const uniqueZones = Array.from(new Set(zones));
+  if (uniqueZones.length <= 1) return uniqueZones;
+  return uniqueZones.sort((a, b) => (ZONE_TRAVEL_TIMES[a] || 30) - (ZONE_TRAVEL_TIMES[b] || 30));
+}
+
+function getTripRouteTime(trip: TruckTrip, includeReturn: boolean = true): number {
+  if (trip.loadedOrders.length === 0) return 0;
   
-  // Sort trucks by capacity (largest first for efficiency)
-  availableTrucks.sort((a, b) => b.volume - a.volume);
+  const zones = optimizeZoneOrder(trip.assignedZones);
+  if (zones.length === 0) return 0;
   
-  // Group orders by zone
-  const ordersByZone: Record<string, OrderData[]> = {};
-  for (const order of unassignedOrders) {
-    const zone = order.zone || "Central";
-    if (!ordersByZone[zone]) ordersByZone[zone] = [];
-    ordersByZone[zone].push(order);
+  // Time from depot to first zone
+  let totalTime = ZONE_TRAVEL_TIMES[zones[0]] || 30;
+  
+  // Time between zones
+  for (let i = 0; i < zones.length - 1; i++) {
+    totalTime += getInterZoneTime(zones[i], zones[i + 1]);
   }
   
-  // Process zones in order of distance from depot (closest first)
-  const zoneDistances = Object.entries(ZONES).map(([zone, coords]) => ({
-    zone,
-    distance: calculateDistance(DEPOT.latitude, DEPOT.longitude, coords.latitude, coords.longitude)
-  })).sort((a, b) => a.distance - b.distance);
+  // Delivery time per stop (10 min average, 15 for heavy items)
+  for (const order of trip.loadedOrders) {
+    totalTime += order.needsTwoPeople ? 15 : 10;
+  }
   
-  let remainingHelpers = availableHelpers;
+  // Return to depot
+  if (includeReturn) {
+    totalTime += ZONE_TRAVEL_TIMES[zones[zones.length - 1]] || 30;
+  }
   
-  for (const { zone } of zoneDistances) {
-    const zoneOrders = ordersByZone[zone] || [];
-    if (zoneOrders.length === 0) continue;
+  return totalTime;
+}
+
+function getOptimizedRoute(trip: TruckTrip): RouteStop[] {
+  if (trip.loadedOrders.length === 0) return [];
+  
+  const zoneOrders: Record<string, OrderData[]> = {};
+  for (const order of trip.loadedOrders) {
+    if (!zoneOrders[order.zone]) zoneOrders[order.zone] = [];
+    zoneOrders[order.zone].push(order);
+  }
+  
+  const zoneSequence = optimizeZoneOrder(trip.assignedZones);
+  const route: RouteStop[] = [];
+  let stopNumber = 1;
+  
+  for (const zone of zoneSequence) {
+    const orders = zoneOrders[zone] || [];
+    orders.sort((a, b) => a.sector.localeCompare(b.sector));
     
-    // Sort orders by weight (heaviest first for better packing)
-    zoneOrders.sort((a, b) => b.totalWeight - a.totalWeight);
+    for (const order of orders) {
+      route.push({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        sequence: stopNumber,
+        zone: order.zone,
+        zipcode: order.zipcode,
+        sector: order.sector,
+        latitude: order.latitude || ZONES[order.zone as keyof typeof ZONES]?.latitude || DEPOT.latitude,
+        longitude: order.longitude || ZONES[order.zone as keyof typeof ZONES]?.longitude || DEPOT.longitude,
+        weightKg: Math.round(order.totalWeight * 100) / 100,
+        volumeM3: Math.round(order.totalVolume / 1000000 * 1000) / 1000,
+        needsTwoPeople: order.needsTwoPeople,
+      });
+      stopNumber++;
+    }
+  }
+  
+  return route;
+}
+
+function getTruckTotalRouteTime(trips: TruckTrip[]): number {
+  if (trips.length === 0) return 0;
+  
+  let totalTime = 0;
+  for (let i = 0; i < trips.length; i++) {
+    totalTime += getTripRouteTime(trips[i], true);
+    if (i < trips.length - 1) {
+      totalTime += DEPOT_RELOAD_TIME;
+    }
+  }
+  return totalTime;
+}
+
+// Main optimization algorithm (Best-Fit Decreasing with zone-based assignment)
+function runOptimizationV3(
+  ordersData: OrderData[],
+  trucksData: TruckData[]
+): {
+  trucksWithTrips: TruckWithTrips[];
+  unassignedOrders: OrderData[];
+  summary: {
+    totalOrders: number;
+    assignedOrders: number;
+    unassignedOrders: number;
+    assignmentRate: number;
+    totalTrips: number;
+    totalElapsedTimeMin: number;
+    totalElapsedTimeHours: number;
+    fleetVolumeUtilization: number;
+    depotReloadTimePerTripMin: number;
+  };
+  parallelDeployment: {
+    deploymentMode: string;
+    totalElapsedTimeMin: number;
+    totalElapsedTimeHours: number;
+    bottleneckTruck: string | null;
+    truckCompletionTimes: Record<string, { totalTimeMin: number; totalTimeHours: number; trips: number }>;
+  };
+  zoneSummary: Record<string, { orders: number; volumeM3: number; weightKg: number }>;
+} {
+  // Initialize trucks with trips
+  const trucksWithTrips: TruckWithTrips[] = trucksData.map(truck => ({
+    truck,
+    trips: [{
+      tripId: 1,
+      truckId: truck.id,
+      maxVolume: truck.volume,
+      maxWeight: truck.maxWeight,
+      truckDims: [truck.width, truck.depth, truck.height] as [number, number, number],
+      loadedOrders: [],
+      currentVolume: 0,
+      currentWeight: 0,
+      assignedZones: [],
+    }],
+    totalOrders: 0,
+    totalVolumeUsed: 0,
+    totalWeightUsed: 0,
+    totalRouteTime: 0,
+  }));
+  
+  const unassignedOrders: OrderData[] = [];
+  
+  // Step 1: Group orders by zone
+  const zoneOrders: Record<string, OrderData[]> = {};
+  for (const order of ordersData) {
+    if (!zoneOrders[order.zone]) zoneOrders[order.zone] = [];
+    zoneOrders[order.zone].push(order);
+  }
+  
+  // Sort orders within each zone by volume (descending) for BFD
+  for (const zone of Object.keys(zoneOrders)) {
+    zoneOrders[zone].sort((a, b) => b.totalVolume - a.totalVolume);
+  }
+  
+  // Step 2: Calculate zone demands and assign trucks to zones
+  const zoneDemands: Record<string, { volume: number; weight: number; count: number }> = {};
+  for (const [zone, orders] of Object.entries(zoneOrders)) {
+    zoneDemands[zone] = {
+      volume: orders.reduce((sum, o) => sum + o.totalVolume, 0),
+      weight: orders.reduce((sum, o) => sum + o.totalWeight, 0),
+      count: orders.length,
+    };
+  }
+  
+  // Sort zones by demand (highest first)
+  const sortedZones = Object.entries(zoneDemands)
+    .sort((a, b) => b[1].volume - a[1].volume)
+    .map(([zone]) => zone);
+  
+  // Sort trucks by capacity (largest first)
+  trucksWithTrips.sort((a, b) => b.truck.volume - a.truck.volume);
+  
+  // Assign trucks to zones based on demand
+  const zoneTruckMap: Record<string, TruckWithTrips[]> = {};
+  const usedTrucks = new Set<number>();
+  
+  for (const zone of sortedZones) {
+    zoneTruckMap[zone] = [];
+    const neededVolume = zoneDemands[zone].volume;
+    let assignedVolume = 0;
     
-    for (const order of zoneOrders) {
-      // Find best truck for this order
-      let bestTruck: TruckData | null = null;
-      let bestAssignment: TruckAssignment | null = null;
+    for (const truckWithTrips of trucksWithTrips) {
+      if (usedTrucks.has(truckWithTrips.truck.id)) continue;
+      if (assignedVolume >= neededVolume) break;
       
-      // Check helper availability
-      const helpersNeeded = HELPER_OPTIONS[order.helpersRequired].count;
-      if (helpersNeeded > remainingHelpers && order.helpersRequired !== "none") {
-        // Skip orders requiring more helpers than available
-        continue;
-      }
+      zoneTruckMap[zone].push(truckWithTrips);
+      assignedVolume += truckWithTrips.truck.volume;
+      usedTrucks.add(truckWithTrips.truck.id);
+    }
+  }
+  
+  // Assign remaining trucks to highest demand zone
+  for (const truckWithTrips of trucksWithTrips) {
+    if (!usedTrucks.has(truckWithTrips.truck.id)) {
+      const bestZone = sortedZones[0] || 'Central';
+      if (!zoneTruckMap[bestZone]) zoneTruckMap[bestZone] = [];
+      zoneTruckMap[bestZone].push(truckWithTrips);
+      usedTrucks.add(truckWithTrips.truck.id);
+    }
+  }
+  
+  // Step 3: Pack orders using Best-Fit Decreasing
+  for (const zone of sortedZones) {
+    const orders = zoneOrders[zone] || [];
+    const assignedTrucks = zoneTruckMap[zone] || [];
+    
+    for (const order of orders) {
+      let packed = false;
       
-      // First try to add to existing assignment in same zone
-      for (const assignment of assignments) {
-        const sameZone = assignment.orders.some(o => o.zone === order.zone);
-        if (!sameZone) continue;
-        
-        const newWeight = assignment.totalWeight + order.totalWeight;
-        const newVolume = assignment.totalVolume + order.totalVolume;
-        
-        if (newWeight <= assignment.truck.maxWeight && newVolume <= assignment.truck.volume) {
-          bestAssignment = assignment;
-          break;
+      // Try to find best fit in assigned zone trucks
+      let bestTruck: TruckWithTrips | null = null;
+      let bestRemaining = Infinity;
+      
+      for (const truckWithTrips of assignedTrucks) {
+        const currentTrip = truckWithTrips.trips[truckWithTrips.trips.length - 1];
+        if (canFitInTrip(currentTrip, order)) {
+          const remaining = currentTrip.maxVolume - currentTrip.currentVolume - order.totalVolume;
+          if (remaining < bestRemaining) {
+            bestRemaining = remaining;
+            bestTruck = truckWithTrips;
+          }
         }
       }
       
-      if (bestAssignment) {
-        bestAssignment.orders.push(order);
-        bestAssignment.totalWeight += order.totalWeight;
-        bestAssignment.totalVolume += order.totalVolume;
-        bestAssignment.helpersNeeded = Math.max(bestAssignment.helpersNeeded, helpersNeeded);
+      if (bestTruck) {
+        const currentTrip = bestTruck.trips[bestTruck.trips.length - 1];
+        loadOrderIntoTrip(currentTrip, order);
+        packed = true;
       } else {
-        // Find available truck with enough capacity
-        for (const truck of availableTrucks) {
-          if (order.totalWeight <= truck.maxWeight && order.totalVolume <= truck.volume) {
-            bestTruck = truck;
+        // Try any truck
+        for (const truckWithTrips of trucksWithTrips) {
+          const currentTrip = truckWithTrips.trips[truckWithTrips.trips.length - 1];
+          if (canFitInTrip(currentTrip, order)) {
+            loadOrderIntoTrip(currentTrip, order);
+            packed = true;
             break;
           }
         }
-        
-        if (bestTruck) {
-          // Remove truck from available pool
-          const truckIndex = availableTrucks.findIndex(t => t.id === bestTruck!.id);
-          if (truckIndex >= 0) availableTrucks.splice(truckIndex, 1);
-          
-          assignments.push({
-            truck: bestTruck,
-            orders: [order],
-            totalWeight: order.totalWeight,
-            totalVolume: order.totalVolume,
-            helpersNeeded: helpersNeeded,
-            route: [],
-            loadPlan: [],
-          });
-          
-          remainingHelpers -= helpersNeeded;
+      }
+      
+      if (!packed) {
+        unassignedOrders.push(order);
+      }
+    }
+  }
+  
+  // Step 4: Handle remaining orders with multi-trip support
+  const remainingOrders = [...unassignedOrders];
+  unassignedOrders.length = 0;
+  remainingOrders.sort((a, b) => b.totalVolume - a.totalVolume);
+  
+  for (const order of remainingOrders) {
+    let packed = false;
+    
+    // Sort trucks by capacity for better packing
+    const sortedTrucks = [...trucksWithTrips].sort((a, b) => b.truck.volume - a.truck.volume);
+    
+    for (const truckWithTrips of sortedTrucks) {
+      let currentTrip = truckWithTrips.trips[truckWithTrips.trips.length - 1];
+      
+      if (!canFitInTrip(currentTrip, order)) {
+        // Create new trip
+        const newTrip: TruckTrip = {
+          tripId: truckWithTrips.trips.length + 1,
+          truckId: truckWithTrips.truck.id,
+          maxVolume: truckWithTrips.truck.volume,
+          maxWeight: truckWithTrips.truck.maxWeight,
+          truckDims: [truckWithTrips.truck.width, truckWithTrips.truck.depth, truckWithTrips.truck.height],
+          loadedOrders: [],
+          currentVolume: 0,
+          currentWeight: 0,
+          assignedZones: [],
+        };
+        truckWithTrips.trips.push(newTrip);
+        currentTrip = newTrip;
+      }
+      
+      if (canFitInTrip(currentTrip, order)) {
+        loadOrderIntoTrip(currentTrip, order);
+        packed = true;
+        break;
+      }
+    }
+    
+    if (!packed) {
+      unassignedOrders.push(order);
+    }
+  }
+  
+  // Calculate totals for each truck
+  for (const truckWithTrips of trucksWithTrips) {
+    truckWithTrips.totalOrders = truckWithTrips.trips.reduce((sum, t) => sum + t.loadedOrders.length, 0);
+    truckWithTrips.totalVolumeUsed = truckWithTrips.trips.reduce((sum, t) => sum + t.currentVolume, 0);
+    truckWithTrips.totalWeightUsed = truckWithTrips.trips.reduce((sum, t) => sum + t.currentWeight, 0);
+    truckWithTrips.totalRouteTime = getTruckTotalRouteTime(truckWithTrips.trips);
+  }
+  
+  // Calculate summary statistics
+  const totalAssigned = trucksWithTrips.reduce((sum, t) => sum + t.totalOrders, 0);
+  const truckTotalTimes = trucksWithTrips.map(t => t.totalRouteTime);
+  const maxTruckTime = Math.max(...truckTotalTimes, 0);
+  const totalFleetVolume = trucksData.reduce((sum, t) => sum + t.volume, 0);
+  const totalVolumeUsed = trucksWithTrips.reduce((sum, t) => sum + t.totalVolumeUsed, 0);
+  
+  // Zone summary
+  const zoneSummary: Record<string, { orders: number; volumeM3: number; weightKg: number }> = {};
+  for (const truckWithTrips of trucksWithTrips) {
+    for (const trip of truckWithTrips.trips) {
+      for (const order of trip.loadedOrders) {
+        if (!zoneSummary[order.zone]) {
+          zoneSummary[order.zone] = { orders: 0, volumeM3: 0, weightKg: 0 };
         }
+        zoneSummary[order.zone].orders++;
+        zoneSummary[order.zone].volumeM3 += order.totalVolume / 1000000;
+        zoneSummary[order.zone].weightKg += order.totalWeight;
       }
     }
   }
   
-  return assignments;
-}
-
-// Stage B: Optimize route within each truck (nearest neighbor TSP)
-function optimizeRoute(assignment: TruckAssignment): RouteStop[] {
-  const stops: RouteStop[] = [];
-  const unvisited = [...assignment.orders];
-  
-  // Start from depot
-  let currentLat = DEPOT.latitude;
-  let currentLon = DEPOT.longitude;
-  let totalTime = 0;
-  let sequence = 1;
-  
-  while (unvisited.length > 0) {
-    // Find nearest unvisited order
-    let nearestIndex = 0;
-    let nearestDistance = Infinity;
-    
-    for (let i = 0; i < unvisited.length; i++) {
-      const coords = getOrderCoordinates(unvisited[i]);
-      const distance = calculateDistance(currentLat, currentLon, coords.lat, coords.lon);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestIndex = i;
-      }
-    }
-    
-    const order = unvisited.splice(nearestIndex, 1)[0];
-    const coords = getOrderCoordinates(order);
-    
-    // Estimate travel time (assume 30 km/h average in Singapore)
-    const travelTime = (nearestDistance / 30) * 60; // minutes
-    const deliveryTime = 10; // 10 minutes per stop
-    totalTime += travelTime + deliveryTime;
-    
-    stops.push({
-      orderId: order.id,
-      sequence,
-      latitude: coords.lat,
-      longitude: coords.lon,
-      address: `${order.zone} Zone - ${order.zipcode}`,
-      estimatedArrivalMinutes: Math.round(totalTime),
-    });
-    
-    currentLat = coords.lat;
-    currentLon = coords.lon;
-    sequence++;
+  // Round zone summary values
+  for (const zone of Object.keys(zoneSummary)) {
+    zoneSummary[zone].volumeM3 = Math.round(zoneSummary[zone].volumeM3 * 100) / 100;
+    zoneSummary[zone].weightKg = Math.round(zoneSummary[zone].weightKg * 100) / 100;
   }
   
-  return stops;
+  // Find bottleneck truck
+  const bottleneckTruck = trucksWithTrips.reduce((max, t) => 
+    t.totalRouteTime > max.totalRouteTime ? t : max, trucksWithTrips[0]);
+  
+  return {
+    trucksWithTrips,
+    unassignedOrders,
+    summary: {
+      totalOrders: ordersData.length,
+      assignedOrders: totalAssigned,
+      unassignedOrders: unassignedOrders.length,
+      assignmentRate: Math.round((totalAssigned / ordersData.length) * 1000) / 10,
+      totalTrips: trucksWithTrips.reduce((sum, t) => sum + t.trips.length, 0),
+      totalElapsedTimeMin: maxTruckTime,
+      totalElapsedTimeHours: Math.round(maxTruckTime / 60 * 100) / 100,
+      fleetVolumeUtilization: totalFleetVolume > 0 
+        ? Math.round((totalVolumeUsed / totalFleetVolume) * 1000) / 10 
+        : 0,
+      depotReloadTimePerTripMin: DEPOT_RELOAD_TIME,
+    },
+    parallelDeployment: {
+      deploymentMode: 'PARALLEL - All trucks deployed simultaneously',
+      totalElapsedTimeMin: maxTruckTime,
+      totalElapsedTimeHours: Math.round(maxTruckTime / 60 * 100) / 100,
+      bottleneckTruck: bottleneckTruck?.truck.name || null,
+      truckCompletionTimes: Object.fromEntries(
+        trucksWithTrips.map(t => [
+          t.truck.name,
+          {
+            totalTimeMin: t.totalRouteTime,
+            totalTimeHours: Math.round(t.totalRouteTime / 60 * 100) / 100,
+            trips: t.trips.length,
+          }
+        ])
+      ),
+    },
+    zoneSummary,
+  };
 }
 
 // 3D Bin Packing with Front/Middle/Back placement
-function generateLoadPlan(assignment: TruckAssignment): LoadPlanItem[] {
+function generateLoadPlan(trip: TruckTrip, route: RouteStop[], truck: TruckData): LoadPlanItem[] {
   const loadPlan: LoadPlanItem[] = [];
-  const truck = assignment.truck;
   
-  // Collect all items from all orders
+  // Collect all items from all orders with their sequence
   const allItems: (ItemData & { orderId: number; sequence: number })[] = [];
   
-  for (const order of assignment.orders) {
-    const routeStop = assignment.route.find(r => r.orderId === order.id);
+  for (const order of trip.loadedOrders) {
+    const routeStop = route.find(r => r.orderId === order.id);
     const sequence = routeStop?.sequence || 999;
     
     for (const item of order.items) {
@@ -279,8 +568,11 @@ function generateLoadPlan(assignment: TruckAssignment): LoadPlanItem[] {
     }
   }
   
-  // Sort items: earlier deliveries (higher sequence) load first (go to back)
-  // Later deliveries load last (go to front)
+  // Sort items: earlier deliveries (lower sequence) should be accessible first
+  // So they go to the BACK (loaded first, unloaded last... wait, that's wrong)
+  // Actually: LIFO - Last In, First Out
+  // Items for FIRST delivery should be loaded LAST (near the door/front)
+  // Items for LAST delivery should be loaded FIRST (at the back)
   allItems.sort((a, b) => b.sequence - a.sequence);
   
   // Divide truck into 3 sections
@@ -292,16 +584,15 @@ function generateLoadPlan(assignment: TruckAssignment): LoadPlanItem[] {
   };
   
   // Assign items to sections based on delivery sequence
-  // First 1/3 of deliveries go to back, last 1/3 to front
   const itemsPerSection = Math.ceil(allItems.length / 3);
   
   for (let i = 0; i < allItems.length; i++) {
     if (i < itemsPerSection) {
-      sections.back.items.push(allItems[i]);
+      sections.back.items.push(allItems[i]); // Last deliveries go to back
     } else if (i < itemsPerSection * 2) {
       sections.middle.items.push(allItems[i]);
     } else {
-      sections.front.items.push(allItems[i]);
+      sections.front.items.push(allItems[i]); // First deliveries go to front
     }
   }
   
@@ -323,14 +614,12 @@ function generateLoadPlan(assignment: TruckAssignment): LoadPlanItem[] {
       
       // Try to fit in current position
       if (currentX + length > truck.width) {
-        // Move to next row
         currentX = 0;
         currentY += rowWidth;
         rowWidth = 0;
       }
       
       if (currentY + width > section.endY) {
-        // Move to next layer
         currentX = 0;
         currentY = section.startY;
         currentZ += layerHeight;
@@ -339,8 +628,7 @@ function generateLoadPlan(assignment: TruckAssignment): LoadPlanItem[] {
       }
       
       if (currentZ + height > truck.height) {
-        // Can't fit, skip item
-        continue;
+        continue; // Can't fit
       }
       
       loadPlan.push({
@@ -368,11 +656,22 @@ function generateLoadPlan(assignment: TruckAssignment): LoadPlanItem[] {
 }
 
 export const globalOptimizeRouter = router({
-  // Run global optimization across all trucks
+  // Get depot information
+  getDepot: protectedProcedure.query(() => {
+    return {
+      name: DEPOT.name,
+      address: DEPOT.address,
+      zipcode: DEPOT.zipcode,
+      latitude: DEPOT.latitude,
+      longitude: DEPOT.longitude,
+    };
+  }),
+
+  // Run global optimization across all trucks using V3 algorithm
   autoOptimize: protectedProcedure
     .input(z.object({
       runDate: z.string(),
-      orderIds: z.array(z.number()).optional(), // If not provided, use all pending orders
+      orderIds: z.array(z.number()).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -388,17 +687,7 @@ export const globalOptimizeRouter = router({
         throw new Error("No available trucks");
       }
       
-      // Get available helpers count
-      const helpersResult = await db
-        .select()
-        .from(personnel)
-        .where(and(
-          eq(personnel.personnelType, "helper"),
-          eq(personnel.status, "available")
-        ));
-      const availableHelpers = helpersResult.length;
-      
-      // Get pending orders (or specified orders)
+      // Get pending orders
       let pendingOrders;
       if (input.orderIds && input.orderIds.length > 0) {
         pendingOrders = await db
@@ -416,7 +705,7 @@ export const globalOptimizeRouter = router({
         throw new Error("No pending orders to optimize");
       }
       
-      // Get items for each order
+      // Get items for each order and build OrderData
       const ordersWithItems: OrderData[] = await Promise.all(
         pendingOrders.map(async (order) => {
           const items = await db
@@ -442,16 +731,29 @@ export const globalOptimizeRouter = router({
             return sum + vol * item.quantity;
           }, 0);
           
+          const maxLength = Math.max(...items.map(i => Number(i.length) || 30));
+          const maxWidth = Math.max(...items.map(i => Number(i.width) || 30));
+          const maxHeight = Math.max(...items.map(i => Number(i.height) || 30));
+          
+          const zipcode = order.zipcode.toString().padStart(6, '0');
+          const sector = zipcode.substring(0, 2);
+          const zone = order.deliveryZone || getZoneFromZipcode(zipcode);
+          
           return {
             id: order.id,
             orderNumber: order.orderNumber,
             zipcode: order.zipcode,
-            zone: order.deliveryZone,
+            zone,
+            sector,
             latitude: order.latitude ? Number(order.latitude) : null,
             longitude: order.longitude ? Number(order.longitude) : null,
             helpersRequired: (order.helpersRequired || "none") as "none" | "one" | "two",
             totalWeight,
             totalVolume,
+            maxLength,
+            maxWidth,
+            maxHeight,
+            needsTwoPeople: totalWeight > 50,
             items: items.map(item => ({
               id: item.id,
               orderId: item.orderId,
@@ -478,37 +780,59 @@ export const globalOptimizeRouter = router({
         volume: Number(t.width) * Number(t.depth) * Number(t.height),
       }));
       
-      // Stage A: Assign orders to trucks
-      const assignments = assignOrdersToTrucks(ordersWithItems, truckData, availableHelpers);
+      // Run V3 optimization
+      const result = runOptimizationV3(ordersWithItems, truckData);
       
-      // Stage B: Optimize routes and generate load plans
-      for (const assignment of assignments) {
-        assignment.route = optimizeRoute(assignment);
-        assignment.loadPlan = generateLoadPlan(assignment);
-      }
+      // Generate routes and load plans for each truck/trip
+      const assignments = result.trucksWithTrips.map(truckWithTrips => {
+        const tripsData = truckWithTrips.trips.map(trip => {
+          const route = getOptimizedRoute(trip);
+          const loadPlanItems = generateLoadPlan(trip, route, truckWithTrips.truck);
+          
+          return {
+            tripId: trip.tripId,
+            orders: trip.loadedOrders.map(o => ({
+              id: o.id,
+              orderNumber: o.orderNumber,
+              zone: o.zone,
+              helpersRequired: o.helpersRequired,
+            })),
+            route,
+            loadPlan: loadPlanItems,
+            volumeUtilization: trip.maxVolume > 0 ? (trip.currentVolume / trip.maxVolume) * 100 : 0,
+            weightUtilization: trip.maxWeight > 0 ? (trip.currentWeight / trip.maxWeight) * 100 : 0,
+            deliveryTimeMin: getTripRouteTime(trip, true),
+            zones: trip.assignedZones,
+          };
+        });
+        
+        return {
+          truck: truckWithTrips.truck,
+          totalTrips: truckWithTrips.trips.length,
+          totalOrders: truckWithTrips.totalOrders,
+          totalVolumeM3: Math.round(truckWithTrips.totalVolumeUsed / 1000000 * 100) / 100,
+          totalWeightKg: Math.round(truckWithTrips.totalWeightUsed * 100) / 100,
+          totalRouteTimeMin: truckWithTrips.totalRouteTime,
+          totalRouteTimeHours: Math.round(truckWithTrips.totalRouteTime / 60 * 100) / 100,
+          trips: tripsData,
+        };
+      });
       
       return {
         success: true,
-        assignments: assignments.map(a => ({
-          truck: a.truck,
-          orders: a.orders.map(o => ({
-            id: o.id,
-            orderNumber: o.orderNumber,
-            zone: o.zone,
-            helpersRequired: o.helpersRequired,
-          })),
-          totalWeight: a.totalWeight,
-          totalVolume: a.totalVolume,
-          helpersNeeded: a.helpersNeeded,
-          route: a.route,
-          loadPlan: a.loadPlan,
-          volumeUtilization: (a.totalVolume / a.truck.volume) * 100,
-          weightUtilization: (a.totalWeight / a.truck.maxWeight) * 100,
-        })),
+        assignments,
         depot: DEPOT,
-        unassignedOrders: ordersWithItems
-          .filter(o => !assignments.some(a => a.orders.some(ao => ao.id === o.id)))
-          .map(o => ({ id: o.id, orderNumber: o.orderNumber, reason: "No available truck with capacity" })),
+        summary: result.summary,
+        parallelDeployment: result.parallelDeployment,
+        zoneSummary: result.zoneSummary,
+        unassignedOrders: result.unassignedOrders.map(o => ({
+          id: o.id,
+          orderNumber: o.orderNumber,
+          zone: o.zone,
+          volumeM3: Math.round(o.totalVolume / 1000000 * 1000) / 1000,
+          weightKg: Math.round(o.totalWeight * 100) / 100,
+          reason: "No available truck with capacity",
+        })),
       };
     }),
 
@@ -518,11 +842,11 @@ export const globalOptimizeRouter = router({
       runDate: z.string(),
       assignments: z.array(z.object({
         truckId: z.number(),
+        tripId: z.number().optional(),
         orderIds: z.array(z.number()),
         route: z.array(z.object({
           orderId: z.number(),
           sequence: z.number(),
-          estimatedArrivalMinutes: z.number(),
         })),
         loadPlan: z.array(z.object({
           orderItemId: z.number(),
@@ -593,28 +917,25 @@ export const globalOptimizeRouter = router({
           await db.insert(loadPlan).values(loadPlanData);
         }
         
-        // Update truck status to in_transit
+        // Update truck status
         await db.update(trucks).set({ status: "in_transit" }).where(eq(trucks.id, assignment.truckId));
         
-        // Update driver status
+        // Update personnel status
         if (assignment.driverId) {
-          await db.update(personnel).set({ status: "assigned" }).where(eq(personnel.id, assignment.driverId));
+          await db.update(personnel).set({ status: "on_route" }).where(eq(personnel.id, assignment.driverId));
         }
-        
-        // Update helper statuses
         if (assignment.helperId) {
-          await db.update(personnel).set({ status: "assigned" }).where(eq(personnel.id, assignment.helperId));
+          await db.update(personnel).set({ status: "on_route" }).where(eq(personnel.id, assignment.helperId));
         }
         if (assignment.helper2Id) {
-          await db.update(personnel).set({ status: "assigned" }).where(eq(personnel.id, assignment.helper2Id));
+          await db.update(personnel).set({ status: "on_route" }).where(eq(personnel.id, assignment.helper2Id));
         }
       }
       
-      return { success: true, runIds: createdRuns };
+      return {
+        success: true,
+        createdRunIds: createdRuns,
+        message: `Created ${createdRuns.length} delivery runs`,
+      };
     }),
-
-  // Get depot info
-  getDepot: protectedProcedure.query(() => {
-    return DEPOT;
-  }),
 });

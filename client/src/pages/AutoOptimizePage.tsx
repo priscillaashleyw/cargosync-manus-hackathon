@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -22,37 +22,39 @@ import {
   AlertTriangle,
   ArrowRight,
   Calendar,
-  Play
+  Play,
+  Clock,
+  RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
-interface Assignment {
-  truck: {
-    id: number;
-    name: string;
-    width: number;
-    depth: number;
-    height: number;
-    maxWeight: number;
-    volume: number;
-  };
+// V3 Algorithm Types
+interface TripData {
+  tripId: number;
   orders: {
     id: number;
     orderNumber: string;
-    zone: string | null;
+    zone: string;
     helpersRequired: string;
   }[];
-  totalWeight: number;
-  totalVolume: number;
-  helpersNeeded: number;
   route: {
     orderId: number;
+    orderNumber: string;
     sequence: number;
-    estimatedArrivalMinutes: number;
+    zone: string;
+    zipcode: string;
+    sector: string;
+    latitude: number;
+    longitude: number;
+    weightKg: number;
+    volumeM3: number;
+    needsTwoPeople: boolean;
   }[];
   loadPlan: {
     orderItemId: number;
+    orderId: number;
+    name: string;
     x: number;
     y: number;
     z: number;
@@ -65,20 +67,63 @@ interface Assignment {
   }[];
   volumeUtilization: number;
   weightUtilization: number;
+  deliveryTimeMin: number;
+  zones: string[];
+}
+
+interface TruckAssignment {
+  truck: {
+    id: number;
+    name: string;
+    width: number;
+    depth: number;
+    height: number;
+    maxWeight: number;
+    volume: number;
+  };
+  totalTrips: number;
+  totalOrders: number;
+  totalVolumeM3: number;
+  totalWeightKg: number;
+  totalRouteTimeMin: number;
+  totalRouteTimeHours: number;
+  trips: TripData[];
 }
 
 interface OptimizationResult {
   success: boolean;
-  assignments: Assignment[];
+  assignments: TruckAssignment[];
   depot: {
     name: string;
     address: string;
     latitude: number;
     longitude: number;
   };
+  summary: {
+    totalOrders: number;
+    assignedOrders: number;
+    unassignedOrders: number;
+    assignmentRate: number;
+    totalTrips: number;
+    totalElapsedTimeMin: number;
+    totalElapsedTimeHours: number;
+    fleetVolumeUtilization: number;
+    depotReloadTimePerTripMin: number;
+  };
+  parallelDeployment: {
+    deploymentMode: string;
+    totalElapsedTimeMin: number;
+    totalElapsedTimeHours: number;
+    bottleneckTruck: string | null;
+    truckCompletionTimes: Record<string, { totalTimeMin: number; totalTimeHours: number; trips: number }>;
+  };
+  zoneSummary: Record<string, { orders: number; volumeM3: number; weightKg: number }>;
   unassignedOrders: {
     id: number;
     orderNumber: string;
+    zone: string;
+    volumeM3: number;
+    weightKg: number;
     reason: string;
   }[];
 }
@@ -99,7 +144,7 @@ export default function AutoOptimizePage() {
 
   const optimizeMutation = trpc.globalOptimize.autoOptimize.useMutation({
     onSuccess: (data) => {
-      setOptimizationResult(data as OptimizationResult);
+      setOptimizationResult(data as unknown as OptimizationResult);
       toast.success(`Optimization complete! ${data.assignments.length} trucks assigned.`);
     },
     onError: (error) => {
@@ -109,7 +154,7 @@ export default function AutoOptimizePage() {
 
   const createRunsMutation = trpc.globalOptimize.createFromAutoOptimize.useMutation({
     onSuccess: (data) => {
-      toast.success(`Created ${data.runIds.length} delivery runs!`);
+      toast.success(`Created ${data.createdRunIds.length} delivery runs!`);
       setShowConfirmDialog(false);
       setOptimizationResult(null);
       setSelectedOrders(new Set());
@@ -159,15 +204,54 @@ export default function AutoOptimizePage() {
   const handleCreateRuns = () => {
     if (!optimizationResult) return;
 
-    const assignments = optimizationResult.assignments.map(a => ({
-      truckId: a.truck.id,
-      orderIds: a.orders.map(o => o.id),
-      route: a.route,
-      loadPlan: a.loadPlan,
-      driverId: selectedDrivers[a.truck.id] ? parseInt(selectedDrivers[a.truck.id]) : undefined,
-      helperId: selectedHelpers[a.truck.id]?.helper1 ? parseInt(selectedHelpers[a.truck.id].helper1!) : undefined,
-      helper2Id: selectedHelpers[a.truck.id]?.helper2 ? parseInt(selectedHelpers[a.truck.id].helper2!) : undefined,
-    }));
+    // Flatten trips into individual delivery runs
+    const assignments: {
+      truckId: number;
+      tripId: number;
+      orderIds: number[];
+      route: { orderId: number; sequence: number }[];
+      loadPlan: {
+        orderItemId: number;
+        x: number;
+        y: number;
+        z: number;
+        rotatedLength: number;
+        rotatedWidth: number;
+        height: number;
+        weight: number;
+        rotation: number;
+        placement: "front" | "middle" | "back";
+      }[];
+      driverId?: number;
+      helperId?: number;
+      helper2Id?: number;
+    }[] = [];
+
+    for (const truckAssignment of optimizationResult.assignments) {
+      for (const trip of truckAssignment.trips) {
+        assignments.push({
+          truckId: truckAssignment.truck.id,
+          tripId: trip.tripId,
+          orderIds: trip.orders.map(o => o.id),
+          route: trip.route.map(r => ({ orderId: r.orderId, sequence: r.sequence })),
+          loadPlan: trip.loadPlan.map(lp => ({
+            orderItemId: lp.orderItemId,
+            x: lp.x,
+            y: lp.y,
+            z: lp.z,
+            rotatedLength: lp.rotatedLength,
+            rotatedWidth: lp.rotatedWidth,
+            height: lp.height,
+            weight: lp.weight,
+            rotation: lp.rotation,
+            placement: lp.placement,
+          })),
+          driverId: selectedDrivers[truckAssignment.truck.id] ? parseInt(selectedDrivers[truckAssignment.truck.id]) : undefined,
+          helperId: selectedHelpers[truckAssignment.truck.id]?.helper1 ? parseInt(selectedHelpers[truckAssignment.truck.id].helper1!) : undefined,
+          helper2Id: selectedHelpers[truckAssignment.truck.id]?.helper2 ? parseInt(selectedHelpers[truckAssignment.truck.id].helper2!) : undefined,
+        });
+      }
+    }
 
     createRunsMutation.mutate({
       runDate,
@@ -199,7 +283,7 @@ export default function AutoOptimizePage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Auto Optimize</h1>
             <p className="text-muted-foreground">
-              Automatically assign orders to trucks and optimize routes
+              V3 Algorithm: Multi-trip support with parallel deployment
             </p>
           </div>
           {depot && (
@@ -249,94 +333,55 @@ export default function AutoOptimizePage() {
                   })}
                 </div>
 
-                {/* Orders by Zone */}
-                <Tabs defaultValue="all">
-                  <TabsList>
-                    <TabsTrigger value="all">All ({pendingOrders?.length || 0})</TabsTrigger>
-                    {zones.map(zone => (
-                      <TabsTrigger key={zone} value={zone}>
-                        {zone} ({ordersByZone[zone]?.length || 0})
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-
-                  <TabsContent value="all">
-                    <ScrollArea className="h-[400px]">
-                      <div className="space-y-2">
-                        {pendingOrders?.map(order => (
-                          <div
-                            key={order.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                              selectedOrders.has(order.id) ? "bg-primary/5 border-primary" : "hover:bg-muted/50"
-                            }`}
-                            onClick={() => {
-                              const newSelected = new Set(selectedOrders);
-                              if (newSelected.has(order.id)) {
-                                newSelected.delete(order.id);
-                              } else {
-                                newSelected.add(order.id);
-                              }
-                              setSelectedOrders(newSelected);
-                            }}
-                          >
-                            <Checkbox checked={selectedOrders.has(order.id)} />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{order.orderNumber}</span>
-                                <Badge className={zoneColors[order.deliveryZone || ""] || "bg-gray-100"}>
-                                  {order.deliveryZone || "N/A"}
-                                </Badge>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {order.items.length} items • {order.totalWeight.toFixed(1)} kg • {(order.totalVolume / 1000000).toFixed(2)} m³
-                              </div>
-                            </div>
-                            {order.needsTwoPeople && (
-                              <Badge variant="secondary">
-                                <Users className="h-3 w-3 mr-1" />
-                                2 People
+                {/* Orders List */}
+                <ScrollArea className="h-[400px]">
+                  {ordersLoading ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading orders...</div>
+                  ) : pendingOrders && pendingOrders.length > 0 ? (
+                    <div className="space-y-2">
+                      {pendingOrders.map(order => (
+                        <div
+                          key={order.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedOrders.has(order.id) ? "bg-primary/5 border-primary" : "hover:bg-muted/50"
+                          }`}
+                          onClick={() => {
+                            const newSelected = new Set(selectedOrders);
+                            if (newSelected.has(order.id)) {
+                              newSelected.delete(order.id);
+                            } else {
+                              newSelected.add(order.id);
+                            }
+                            setSelectedOrders(newSelected);
+                          }}
+                        >
+                          <Checkbox checked={selectedOrders.has(order.id)} />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{order.orderNumber}</span>
+                              <Badge variant="outline" className={zoneColors[order.deliveryZone || ""] || ""}>
+                                {order.deliveryZone || "Unknown"}
                               </Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-
-                  {zones.map(zone => (
-                    <TabsContent key={zone} value={zone}>
-                      <ScrollArea className="h-[400px]">
-                        <div className="space-y-2">
-                          {ordersByZone[zone]?.map(order => (
-                            <div
-                              key={order.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                                selectedOrders.has(order.id) ? "bg-primary/5 border-primary" : "hover:bg-muted/50"
-                              }`}
-                              onClick={() => {
-                                const newSelected = new Set(selectedOrders);
-                                if (newSelected.has(order.id)) {
-                                  newSelected.delete(order.id);
-                                } else {
-                                  newSelected.add(order.id);
-                                }
-                                setSelectedOrders(newSelected);
-                              }}
-                            >
-                              <Checkbox checked={selectedOrders.has(order.id)} />
-                              <div className="flex-1">
-                                <span className="font-medium">{order.orderNumber}</span>
-                                <div className="text-sm text-muted-foreground">
-                                  {order.items.length} items • {order.totalWeight.toFixed(1)} kg
-                                </div>
-                              </div>
                             </div>
-                          ))}
+                            <div className="text-sm text-muted-foreground">
+                              {order.zipcode} • {order.items?.length || 0} items • {order.totalWeight?.toFixed(1) || "?"} kg
+                            </div>
+                          </div>
+                          {(order as any).helpersRequired !== "none" && (
+                            <Badge variant="secondary">
+                              <Users className="h-3 w-3 mr-1" />
+                              {(order as any).helpersRequired === "one" ? "1" : "2"} helper{(order as any).helpersRequired === "two" ? "s" : ""}
+                            </Badge>
+                          )}
                         </div>
-                      </ScrollArea>
-                    </TabsContent>
-                  ))}
-                </Tabs>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No pending orders available
+                    </div>
+                  )}
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>
@@ -345,119 +390,85 @@ export default function AutoOptimizePage() {
           <div className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Optimization Settings</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Run Settings
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>
-                    <Calendar className="h-4 w-4 inline mr-2" />
-                    Delivery Date
-                  </Label>
+                <div>
+                  <Label>Delivery Date</Label>
                   <Input
                     type="date"
                     value={runDate}
                     onChange={(e) => setRunDate(e.target.value)}
                   />
                 </div>
-
-                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Selected Orders</span>
-                    <span className="font-bold">{selectedOrders.size}</span>
+                <div className="pt-2">
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Selected: {selectedOrders.size} orders
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Total Weight</span>
-                    <span className="font-bold">
-                      {pendingOrders
-                        ?.filter(o => selectedOrders.has(o.id))
-                        .reduce((sum, o) => sum + o.totalWeight, 0)
-                        .toFixed(1)} kg
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Total Volume</span>
-                    <span className="font-bold">
-                      {((pendingOrders
-                        ?.filter(o => selectedOrders.has(o.id))
-                        .reduce((sum, o) => sum + o.totalVolume, 0) ?? 0) / 1000000)
-                        .toFixed(2)} m³
-                    </span>
-                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={handleOptimize}
+                    disabled={selectedOrders.size === 0 || optimizeMutation.isPending}
+                  >
+                    {optimizeMutation.isPending ? (
+                      <>
+                        <RotateCcw className="h-4 w-4 mr-2 animate-spin" />
+                        Optimizing...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        Run Optimization
+                      </>
+                    )}
+                  </Button>
                 </div>
-
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={handleOptimize}
-                  disabled={selectedOrders.size === 0 || optimizeMutation.isPending}
-                >
-                  {optimizeMutation.isPending ? (
-                    <>Optimizing...</>
-                  ) : (
-                    <>
-                      <Zap className="h-4 w-4 mr-2" />
-                      Run Auto-Optimization
-                    </>
-                  )}
-                </Button>
               </CardContent>
             </Card>
 
-            {/* Results Summary */}
+            {/* Optimization Summary */}
             {optimizationResult && (
-              <Card>
+              <Card className="border-green-200 bg-green-50/50">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    Optimization Results
+                  <CardTitle className="flex items-center gap-2 text-green-700">
+                    <CheckCircle2 className="h-5 w-5" />
+                    Optimization Complete
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    {optimizationResult.assignments.map((assignment, index) => (
-                      <div key={index} className="p-3 border rounded-lg">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Truck className="h-4 w-4" />
-                            <span className="font-medium">{assignment.truck.name}</span>
-                          </div>
-                          <Badge>{assignment.orders.length} orders</Badge>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-sm">
-                            <span>Volume</span>
-                            <span>{assignment.volumeUtilization.toFixed(1)}%</span>
-                          </div>
-                          <Progress value={assignment.volumeUtilization} className="h-2" />
-                          <div className="flex justify-between text-sm">
-                            <span>Weight</span>
-                            <span>{assignment.weightUtilization.toFixed(1)}%</span>
-                          </div>
-                          <Progress value={assignment.weightUtilization} className="h-2" />
-                        </div>
-                        {assignment.helpersNeeded > 0 && (
-                          <div className="mt-2 text-sm text-muted-foreground">
-                            <Users className="h-3 w-3 inline mr-1" />
-                            {assignment.helpersNeeded} helper(s) needed
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Assigned</div>
+                      <div className="font-semibold">{optimizationResult.summary.assignedOrders} orders</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Total Trips</div>
+                      <div className="font-semibold">{optimizationResult.summary.totalTrips}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Total Time</div>
+                      <div className="font-semibold">{optimizationResult.summary.totalElapsedTimeHours} hrs</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Fleet Utilization</div>
+                      <div className="font-semibold">{optimizationResult.summary.fleetVolumeUtilization}%</div>
+                    </div>
                   </div>
+                  
+                  {optimizationResult.parallelDeployment.bottleneckTruck && (
+                    <div className="text-xs text-muted-foreground border-t pt-2">
+                      <Clock className="h-3 w-3 inline mr-1" />
+                      Bottleneck: {optimizationResult.parallelDeployment.bottleneckTruck}
+                    </div>
+                  )}
 
                   {optimizationResult.unassignedOrders.length > 0 && (
-                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-center gap-2 text-yellow-800 mb-2">
-                        <AlertTriangle className="h-4 w-4" />
-                        <span className="font-medium">
-                          {optimizationResult.unassignedOrders.length} orders not assigned
-                        </span>
-                      </div>
-                      <ul className="text-sm text-yellow-700 space-y-1">
-                        {optimizationResult.unassignedOrders.map(o => (
-                          <li key={o.id}>{o.orderNumber}: {o.reason}</li>
-                        ))}
-                      </ul>
+                    <div className="flex items-center gap-2 text-amber-600 text-sm">
+                      <AlertTriangle className="h-4 w-4" />
+                      {optimizationResult.unassignedOrders.length} orders could not be assigned
                     </div>
                   )}
 
@@ -474,99 +485,240 @@ export default function AutoOptimizePage() {
           </div>
         </div>
 
+        {/* Optimization Results */}
+        {optimizationResult && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Truck Assignments</CardTitle>
+              <CardDescription>
+                {optimizationResult.parallelDeployment.deploymentMode}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="trucks">
+                <TabsList>
+                  <TabsTrigger value="trucks">By Truck</TabsTrigger>
+                  <TabsTrigger value="zones">By Zone</TabsTrigger>
+                  {optimizationResult.unassignedOrders.length > 0 && (
+                    <TabsTrigger value="unassigned">
+                      Unassigned ({optimizationResult.unassignedOrders.length})
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+
+                <TabsContent value="trucks" className="mt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {optimizationResult.assignments.map((assignment) => (
+                      <Card key={assignment.truck.id} className="border-2">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              <Truck className="h-5 w-5" />
+                              {assignment.truck.name}
+                            </CardTitle>
+                            <Badge variant="outline">
+                              {assignment.totalTrips} trip{assignment.totalTrips > 1 ? "s" : ""}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <div className="text-muted-foreground">Orders</div>
+                              <div className="font-semibold">{assignment.totalOrders}</div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Route Time</div>
+                              <div className="font-semibold">{assignment.totalRouteTimeHours} hrs</div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span>Volume</span>
+                              <span>{assignment.totalVolumeM3} m³</span>
+                            </div>
+                            <Progress 
+                              value={assignment.trips[0]?.volumeUtilization || 0} 
+                              className="h-2"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span>Weight</span>
+                              <span>{assignment.totalWeightKg} kg</span>
+                            </div>
+                            <Progress 
+                              value={assignment.trips[0]?.weightUtilization || 0} 
+                              className="h-2"
+                            />
+                          </div>
+
+                          {/* Trip details */}
+                          {assignment.trips.map((trip, idx) => (
+                            <div key={trip.tripId} className="border-t pt-2 mt-2">
+                              <div className="text-xs font-medium mb-1">
+                                Trip {trip.tripId}: {trip.orders.length} orders • {trip.deliveryTimeMin} min
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {trip.zones.map(zone => (
+                                  <Badge key={zone} variant="secondary" className={`text-xs ${zoneColors[zone] || ""}`}>
+                                    {zone}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="zones" className="mt-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {Object.entries(optimizationResult.zoneSummary).map(([zone, stats]) => (
+                      <Card key={zone}>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">
+                            <Badge className={zoneColors[zone] || ""}>{zone}</Badge>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="text-sm space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Orders</span>
+                            <span className="font-medium">{stats.orders}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Volume</span>
+                            <span className="font-medium">{stats.volumeM3} m³</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Weight</span>
+                            <span className="font-medium">{stats.weightKg} kg</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </TabsContent>
+
+                {optimizationResult.unassignedOrders.length > 0 && (
+                  <TabsContent value="unassigned" className="mt-4">
+                    <div className="space-y-2">
+                      {optimizationResult.unassignedOrders.map(order => (
+                        <div key={order.id} className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50">
+                          <AlertTriangle className="h-4 w-4 text-amber-600" />
+                          <div className="flex-1">
+                            <div className="font-medium">{order.orderNumber}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {order.zone} • {order.volumeM3} m³ • {order.weightKg} kg
+                            </div>
+                          </div>
+                          <div className="text-sm text-amber-600">{order.reason}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                )}
+              </Tabs>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Confirm Dialog */}
         <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Assign Personnel & Create Runs</DialogTitle>
+              <DialogTitle>Create Delivery Runs</DialogTitle>
               <DialogDescription>
-                Assign drivers and helpers to each truck before creating delivery runs
+                Assign drivers and helpers to each truck before creating delivery runs.
               </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="max-h-[60vh]">
-              <div className="space-y-4 p-1">
-                {optimizationResult?.assignments.map((assignment) => (
-                  <Card key={assignment.truck.id}>
-                    <CardContent className="pt-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Truck className="h-5 w-5" />
-                        <span className="font-semibold">{assignment.truck.name}</span>
-                        <Badge variant="outline">{assignment.orders.length} orders</Badge>
+
+            <div className="space-y-4 max-h-[400px] overflow-y-auto">
+              {optimizationResult?.assignments.map((assignment) => (
+                <Card key={assignment.truck.id}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Truck className="h-4 w-4" />
+                      {assignment.truck.name}
+                      <Badge variant="outline" className="ml-auto">
+                        {assignment.totalOrders} orders • {assignment.totalTrips} trip{assignment.totalTrips > 1 ? "s" : ""}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <Label className="text-xs">Driver</Label>
+                        <Select
+                          value={selectedDrivers[assignment.truck.id] || ""}
+                          onValueChange={(value) => setSelectedDrivers(prev => ({ ...prev, [assignment.truck.id]: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select driver" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {drivers?.filter(d => d.status === "available").map(driver => (
+                              <SelectItem key={driver.id} value={String(driver.id)}>
+                                {driver.fullName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <Label>Driver</Label>
-                          <Select
-                            value={selectedDrivers[assignment.truck.id] || ""}
-                            onValueChange={(v) => setSelectedDrivers(prev => ({
-                              ...prev,
-                              [assignment.truck.id]: v
-                            }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select driver" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {drivers?.filter(d => d.status === "available").map(driver => (
-                                <SelectItem key={driver.id} value={String(driver.id)}>
-                                  {driver.fullName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Helper 1</Label>
-                          <Select
-                            value={selectedHelpers[assignment.truck.id]?.helper1 || "none"}
-                            onValueChange={(v) => setSelectedHelpers(prev => ({
-                              ...prev,
-                              [assignment.truck.id]: { ...prev[assignment.truck.id], helper1: v }
-                            }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select helper" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">No helper</SelectItem>
-                              {helpers?.filter(h => h.status === "available").map(helper => (
-                                <SelectItem key={helper.id} value={String(helper.id)}>
-                                  {helper.fullName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {assignment.helpersNeeded >= 2 && (
-                          <div>
-                            <Label>Helper 2</Label>
-                            <Select
-                              value={selectedHelpers[assignment.truck.id]?.helper2 || "none"}
-                              onValueChange={(v) => setSelectedHelpers(prev => ({
-                                ...prev,
-                                [assignment.truck.id]: { ...prev[assignment.truck.id], helper2: v }
-                              }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select helper" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">No helper</SelectItem>
-                                {helpers?.filter(h => h.status === "available").map(helper => (
-                                  <SelectItem key={helper.id} value={String(helper.id)}>
-                                    {helper.fullName}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
+                      <div>
+                        <Label className="text-xs">Helper 1</Label>
+                        <Select
+                          value={selectedHelpers[assignment.truck.id]?.helper1 || ""}
+                          onValueChange={(value) => setSelectedHelpers(prev => ({
+                            ...prev,
+                            [assignment.truck.id]: { ...prev[assignment.truck.id], helper1: value }
+                          }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Optional" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {helpers?.filter(h => h.status === "available").map(helper => (
+                              <SelectItem key={helper.id} value={String(helper.id)}>
+                                {helper.fullName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
+                      <div>
+                        <Label className="text-xs">Helper 2</Label>
+                        <Select
+                          value={selectedHelpers[assignment.truck.id]?.helper2 || ""}
+                          onValueChange={(value) => setSelectedHelpers(prev => ({
+                            ...prev,
+                            [assignment.truck.id]: { ...prev[assignment.truck.id], helper2: value }
+                          }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Optional" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {helpers?.filter(h => h.status === "available").map(helper => (
+                              <SelectItem key={helper.id} value={String(helper.id)}>
+                                {helper.fullName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
                 Cancel
